@@ -15,6 +15,8 @@ body{margin:0}
 a{color:#FFFFFF}a:hover{color:#D6D6D6}
 ::selection{background:#FF1A1A;color:#FFFFFF}
 button:focus-visible,a:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}
+@keyframes rs-shift{0%{opacity:1}50%{opacity:0.12}}
+@media (prefers-reduced-motion: reduce){span[style*="rs-shift"]{animation:none !important}}
 </style>
 </helmet>
 <div style="width: 800px; height: 480px; box-sizing: border-box; display: flex; background: #18181A; color: #FFFFFF; font-family: 'Saira', 'Inter', sans-serif; overflow: hidden">
@@ -40,6 +42,11 @@ button:focus-visible,a:focus-visible{outline:2px solid #FFFFFF;outline-offset:2p
 <span style="width: 7px; height: 7px; border-radius: 4px; background: #FFFFFF"></span>OBD · 14 Hz
 </div>
 </header>
+<div role="img" aria-label="Shift lights" style="height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px">
+<sc-for list="{{shift}}" as="l" hint-placeholder-count="5">
+<span style="width: 22px; height: 22px; border-radius: 11px; box-sizing: border-box; background: {{l.fill}}; border: 1px solid {{l.edge}}; box-shadow: {{l.glow}}; animation: {{l.anim}}"></span>
+</sc-for>
+</div>
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
 <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 232px; height: 324px; padding-top: 46px; box-sizing: border-box; flex-shrink: 0;">
 <div style="position: relative; width: 232px; height: 232px; flex-shrink: 0">
@@ -181,17 +188,33 @@ Engine and gearbox oil hot — above 130 °C and 120 °C
 </main>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"oilTemp":{"editor":"range","min":40,"max":155,"step":1,"unit":"°C","default":141,"section":"Sample readings"},"gearTemp":{"editor":"range","min":40,"max":135,"step":1,"unit":"°C","default":126,"section":"Sample readings"},"gLat":{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":-0.55,"section":"Sample readings"},"gLon":{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":0.2,"section":"Sample readings"},"$preview":{"width":800,"height":480}}'>
+<script type="text/x-dc" data-dc-script data-props='{"rpm":{"editor":"range","min":800,"max":8600,"step":50,"unit":"rpm","default":8300,"section":"Sample readings"},"oilTemp":{"editor":"range","min":40,"max":155,"step":1,"unit":"°C","default":141,"section":"Sample readings"},"gearTemp":{"editor":"range","min":40,"max":135,"step":1,"unit":"°C","default":126,"section":"Sample readings"},"gLat":{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":-0.55,"section":"Sample readings"},"gLon":{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":0.2,"section":"Sample readings"},"$preview":{"width":800,"height":480}}'>
 class Component extends DCLogic {
   needle(v, lo, hi, red, side) {
     var c = Math.max(lo, Math.min(hi, v));
     var t = c <= 100 ? 150 - 60 * (c - lo) / (100 - lo) : 90 - 60 * (c - 100) / (hi - 100);
     return { angle: (side * t).toFixed(1), value: Math.round(v), color: v >= red ? '#FF1A1A' : '#FFFFFF' };
   }
+  shift(rpm) {
+    var on = [4000, 5000, 6000, 7000, 8000];
+    var col = ['#2FD158', '#FFD60A', '#FFD60A', '#FFD60A', '#FF1A1A'];
+    var flash = rpm >= 8200;
+    return on.map(function (at, i) {
+      var lit = flash || rpm >= at;
+      var c = flash ? '#FF1A1A' : col[i];
+      return {
+        fill: lit ? c : '#0B0B0C',
+        edge: lit ? c : '#3A3A3E',
+        glow: lit ? '0 0 10px 1px ' + c : 'none',
+        anim: flash ? 'rs-shift 0.25s steps(1, end) infinite' : 'none'
+      };
+    });
+  }
   renderVals() {
     var lat = this.props.gLat ?? -0.55;
     var lon = this.props.gLon ?? 0.2;
     return {
+      shift: this.shift(this.props.rpm ?? 8300),
       oil: this.needle(this.props.oilTemp ?? 141, 50, 150, 130, -1),
       gear: this.needle(this.props.gearTemp ?? 126, 50, 130, 120, 1),
       g: { x: (162.0 + lat * 60).toFixed(1), y: (162.0 - lon * 60).toFixed(1) }

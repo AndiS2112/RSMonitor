@@ -6,6 +6,7 @@ It shows three things on the car screen:
 - Engine oil temperature
 - Gearbox (S tronic) oil temperature
 - A G-meter with a peak trace
+- A five-stage shift light
 
 Status: **design only.** No Android code has been written yet. The design in this repo is the
 one to build from.
@@ -58,6 +59,7 @@ python3 tools/render_preview.py design design/preview
 - Each oil gauge has its name and precise temperature on one line underneath: reading to the
   right of "ENGINE OIL", to the left of "GEARBOX OIL". The reading has a fixed width so the
   label does not move as digits change.
+- A row of five shift lights sits under the title, above the G-meter.
 - A slot at the bottom is reserved for notices, so the gauges do not move when one appears.
 
 **States**
@@ -67,6 +69,23 @@ python3 tools/render_preview.py design design/preview
 - **Hot:** the reading turns red once the oil is in its hot zone, and a filled red warning
   notice appears: "Engine and gearbox oil hot — above 130 °C and 120 °C". It is deliberately
   bolder than the cold notice. The wording for only one oil being hot is not written yet.
+
+**Shift light**
+
+| Light | Colour | Comes on at |
+|---|---|---|
+| 1 | Green | 4,000 rpm |
+| 2 | Yellow | 5,000 rpm |
+| 3 | Yellow | 6,000 rpm |
+| 4 | Yellow | 7,000 rpm |
+| 5 | Red | 8,000 rpm |
+
+- From 8,200 rpm all five flash red: upshift.
+- Lights stay on once passed, so they fill from left to right. Unlit lights show as dark sockets.
+- The flash is four times a second and stops if the device asks for reduced motion.
+- The sample screens show the three cases: cold start at 1,500 rpm (all off), driving at
+  6,300 rpm (green and two yellow), hot at 8,300 rpm (flashing; the preview image shows all
+  five lit, since a still image cannot flash).
 
 **Scales**
 
@@ -101,6 +120,7 @@ python3 tools/render_preview.py design design/preview
 | Hot zone, hot reading, G trace | `#FF1A1A` |
 | Hot notice fill | `#C8101A` |
 | G-meter peak numbers, "waiting" in the console | `#F5A623` |
+| Shift lights | green `#2FD158`, yellow `#FFD60A`, red `#FF1A1A`, unlit `#0B0B0C` |
 
 Saira throughout; numbers are bold italic at 112.5% width. The console log uses JetBrains Mono.
 
@@ -109,6 +129,8 @@ Saira throughout; numbers are bold italic at 112.5% width. The console log uses 
 - **Android Auto screen:** Google's Car App Library, sideloaded (not a Play Store app).
 - **OBD link:** Kotlin layer talking to an ELM327-type adapter over Bluetooth, sending
   requests to the engine unit (7E0) and gearbox unit (7E1).
+- **Shift light:** from engine speed, which is a standard OBD2 value (PID 0C), so it needs no
+  Audi-specific data ID. It has to be polled far more often than the two temperatures.
 - **G-meter:** from the phone's motion sensor, with a calibrate step for how the phone is
   mounted.
 - **Phone app:** adapter pairing, plus the discovery console for sending commands and checking
@@ -126,3 +148,7 @@ Auto showing live RPM.
    They have to be found on the car and checked against VCDS.
 3. **Which Bluetooth adapter** will be used (classic Bluetooth or Bluetooth Low Energy).
 4. **Hot notice wording when only one oil is hot** (engine only, gearbox only).
+5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
+   Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
+   time, so the lights may need to come on earlier than the figures above. This has to be
+   measured on the car.

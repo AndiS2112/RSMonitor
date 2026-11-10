@@ -18,6 +18,12 @@ INK3 = "#A8A8AE"    # secondary text
 HOT = "#FF1A1A"     # hot zone, hot readout, G trace
 PEAK = "#F5A623"    # G-meter peak numbers
 ICON = "#D2D2D6"
+SOCKET = "#0B0B0C"  # unlit shift light
+SHIFT_GREEN = "#2FD158"
+SHIFT_YELLOW = "#FFD60A"
+# shift lights: rpm at which each of the five comes on, and where all five flash red
+SHIFT_ON = [4000, 5000, 6000, 7000, 8000]
+SHIFT_FLASH = 8200
 F = "'Saira', 'Inter', sans-serif"
 # one numeral voice for scale numbers, readouts and G peaks
 NUM_SVG = 'font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%"'
@@ -225,7 +231,7 @@ def notice_pill(kind):
 </div>'''
 
 
-def page(title, oil, gear, lat, lon, peaks, state=None):
+def page(title, oil, gear, lat, lon, peaks, rpm, state=None):
     notice = notice_pill(state)
     return f'''<!doctype html>
 <html lang="en">
@@ -244,6 +250,8 @@ body{{margin:0}}
 a{{color:{INK}}}a:hover{{color:{INK2}}}
 ::selection{{background:{HOT};color:{INK}}}
 button:focus-visible,a:focus-visible{{outline:2px solid {INK};outline-offset:2px}}
+@keyframes rs-shift{{0%{{opacity:1}}50%{{opacity:0.12}}}}
+@media (prefers-reduced-motion: reduce){{span[style*="rs-shift"]{{animation:none !important}}}}
 </style>
 </helmet>
 <div style="width: 800px; height: 480px; box-sizing: border-box; display: flex; background: {BG}; color: {INK}; font-family: {F}; overflow: hidden">
@@ -256,6 +264,11 @@ button:focus-visible,a:focus-visible{{outline:2px solid {INK};outline-offset:2px
 <span style="width: 7px; height: 7px; border-radius: 4px; background: {INK}"></span>OBD · 14 Hz
 </div>
 </header>
+<div role="img" aria-label="Shift lights" style="height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px">
+<sc-for list="{{{{shift}}}}" as="l" hint-placeholder-count="5">
+<span style="width: 22px; height: 22px; border-radius: 11px; box-sizing: border-box; background: {{{{l.fill}}}}; border: 1px solid {{{{l.edge}}}}; box-shadow: {{{{l.glow}}}}; animation: {{{{l.anim}}}}"></span>
+</sc-for>
+</div>
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
 {side_block('oil', 'ENGINE OIL', 50, 150, [50,100,150], 130, -1)}
 {gmeter(peaks)}
@@ -265,17 +278,33 @@ button:focus-visible,a:focus-visible{{outline:2px solid {INK};outline-offset:2px
 </main>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{{"oilTemp":{{"editor":"range","min":40,"max":155,"step":1,"unit":"°C","default":{oil},"section":"Sample readings"}},"gearTemp":{{"editor":"range","min":40,"max":135,"step":1,"unit":"°C","default":{gear},"section":"Sample readings"}},"gLat":{{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":{lat},"section":"Sample readings"}},"gLon":{{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":{lon},"section":"Sample readings"}},"$preview":{{"width":800,"height":480}}}}'>
+<script type="text/x-dc" data-dc-script data-props='{{"rpm":{{"editor":"range","min":800,"max":8600,"step":50,"unit":"rpm","default":{rpm},"section":"Sample readings"}},"oilTemp":{{"editor":"range","min":40,"max":155,"step":1,"unit":"°C","default":{oil},"section":"Sample readings"}},"gearTemp":{{"editor":"range","min":40,"max":135,"step":1,"unit":"°C","default":{gear},"section":"Sample readings"}},"gLat":{{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":{lat},"section":"Sample readings"}},"gLon":{{"editor":"range","min":-1.5,"max":1.5,"step":0.01,"default":{lon},"section":"Sample readings"}},"$preview":{{"width":800,"height":480}}}}'>
 class Component extends DCLogic {{
   needle(v, lo, hi, red, side) {{
     var c = Math.max(lo, Math.min(hi, v));
     var t = c <= 100 ? 150 - 60 * (c - lo) / (100 - lo) : 90 - 60 * (c - 100) / (hi - 100);
     return {{ angle: (side * t).toFixed(1), value: Math.round(v), color: v >= red ? '{HOT}' : '{INK}' }};
   }}
+  shift(rpm) {{
+    var on = {SHIFT_ON};
+    var col = ['{SHIFT_GREEN}', '{SHIFT_YELLOW}', '{SHIFT_YELLOW}', '{SHIFT_YELLOW}', '{HOT}'];
+    var flash = rpm >= {SHIFT_FLASH};
+    return on.map(function (at, i) {{
+      var lit = flash || rpm >= at;
+      var c = flash ? '{HOT}' : col[i];
+      return {{
+        fill: lit ? c : '{SOCKET}',
+        edge: lit ? c : '{LINE}',
+        glow: lit ? '0 0 10px 1px ' + c : 'none',
+        anim: flash ? 'rs-shift 0.25s steps(1, end) infinite' : 'none'
+      }};
+    }});
+  }}
   renderVals() {{
     var lat = this.props.gLat ?? {lat};
     var lon = this.props.gLon ?? {lon};
     return {{
+      shift: this.shift(this.props.rpm ?? {rpm}),
       oil: this.needle(this.props.oilTemp ?? {oil}, 50, 150, 130, -1),
       gear: this.needle(this.props.gearTemp ?? {gear}, 50, 130, 120, 1),
       g: {{ x: ({GC} + lat * {GS}).toFixed(1), y: ({GC} - lon * {GS}).toFixed(1) }}
@@ -288,6 +317,6 @@ class Component extends DCLogic {{
 '''
 
 
-open(f'{OUT}/Main.dc.html', 'w').write(page('RS Monitor — driving', 104, 88, 0.62, -0.28, (0.36, 0.88, 0.95, 0.82)))
-open(f'{OUT}/Warmup.dc.html', 'w').write(page('RS Monitor — cold start', 46, 38, 0.02, 0.01, (0.08, 0.10, 0.12, 0.09), 'cold'))
-open(f'{OUT}/Hot.dc.html', 'w').write(page('RS Monitor — hot', 141, 126, -0.55, 0.20, (0.36, 0.88, 0.95, 0.82), 'hot'))
+open(f'{OUT}/Main.dc.html', 'w').write(page('RS Monitor — driving', 104, 88, 0.62, -0.28, (0.36, 0.88, 0.95, 0.82), 6300))
+open(f'{OUT}/Warmup.dc.html', 'w').write(page('RS Monitor — cold start', 46, 38, 0.02, 0.01, (0.08, 0.10, 0.12, 0.09), 1500, 'cold'))
+open(f'{OUT}/Hot.dc.html', 'w').write(page('RS Monitor — hot', 141, 126, -0.55, 0.20, (0.36, 0.88, 0.95, 0.82), 8300, 'hot'))

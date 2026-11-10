@@ -11,6 +11,11 @@ local font and differs from the canvas (which uses Saira).
 import json, os, re, subprocess, sys
 
 HOT, INK = '#FF1A1A', '#FFFFFF'
+# keep in step with gen_gauges.py
+SHIFT_ON = [4000, 5000, 6000, 7000, 8000]
+SHIFT_FLASH = 8200
+SHIFT_COL = ['#2FD158', '#FFD60A', '#FFD60A', '#FFD60A', HOT]
+SOCKET, LINE = '#0B0B0C', '#3A3A3E'
 GC, GS = 162.0, 60.0   # G-meter centre and px per g; keep in step with gen_gauges.py
 
 
@@ -37,6 +42,17 @@ def needle(v, lo, hi, red, side):
     return {'angle': f'{side*t:.1f}', 'value': str(round(v)), 'color': HOT if v >= red else INK}
 
 
+def shift(rpm):
+    """Same rule as the screens, but a flash is drawn as all five lit (a still image cannot flash)."""
+    flash = rpm >= SHIFT_FLASH
+    out = []
+    for at, col in zip(SHIFT_ON, SHIFT_COL):
+        lit = flash or rpm >= at
+        c = HOT if flash else col
+        out.append({'fill': c if lit else SOCKET, 'edge': c if lit else LINE, 'glow': f'0 0 10px 1px {c}' if lit else 'none', 'anim': 'none'})
+    return out
+
+
 def gauges(src, out):
     html = open(src).read()
     props = json.loads(re.search(r"data-props='(.*?)'", html, flags=re.S).group(1))
@@ -47,6 +63,9 @@ def gauges(src, out):
             vals[f'{key}.{k}'] = v
     vals['g.x'] = f"{GC + d('gLat') * GS:.1f}"
     vals['g.y'] = f"{GC - d('gLon') * GS:.1f}"
+    lights = shift(d('rpm'))
+    html = re.sub(r'<sc-for list="\{\{shift\}\}"[^>]*>(.*?)</sc-for>',
+                  lambda m: ''.join(re.sub(r'\{\{l\.(\w+)\}\}', lambda k: l[k.group(1)], m.group(1)) for l in lights), html, flags=re.S)
     html = re.sub(r'\{\{\s*([\w.]+)\s*\}\}', lambda m: vals.get(m.group(1), m.group(0)), html)
     shot(html, out, 800, 480)
 
