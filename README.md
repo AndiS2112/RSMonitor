@@ -56,9 +56,18 @@ To build on a computer instead, open the repo in Android Studio.
 
 **On the car screen**
 
-In Android Auto's settings on the phone, tap the version line ten times to unlock developer
-settings, then turn on "Unknown sources". RS Monitor then appears in the app list on the car
-screen.
+Installing the APK the normal way is not enough. Android Auto only shows an app built with the
+Car App Library if Android has it recorded as installed from Google Play, and the "Unknown
+sources" developer setting does not change that for this kind of app. Two ways round it:
+
+- **From a computer:** turn on USB debugging on the phone, uninstall RS Monitor, then install
+  with `adb install -i com.android.vending app-debug.apk`.
+- **Through Google Play:** upload the app to a Play Console internal test track and install it
+  from there. This is the route Google documents for testing in a real car.
+
+After installing, reconnect the phone to the car. If RS Monitor is still missing, check
+"Customize launcher" in Android Auto's settings on the phone. The `adb` route has not been
+confirmed on this phone yet.
 
 **Code layout**
 
