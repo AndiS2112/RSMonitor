@@ -12,6 +12,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to publish the rendered previews to the "previews" branch
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +28,19 @@ jobs:
 
       - name: Test and build
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
+
+      # The gauge screen as drawn by the app, one PNG per state, on a branch of its own
+      # so the images can be viewed and linked without downloading an artifact.
+      - name: Publish previews to the previews branch
+        if: always()
+        run: |
+          cd app/build/outputs/gauge-previews || exit 0
+          git init -q -b previews
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "Gauge previews for ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" previews
 
       - uses: actions/upload-artifact@v4
         if: always()
