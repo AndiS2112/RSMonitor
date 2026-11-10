@@ -8,8 +8,9 @@ It shows three things on the car screen:
 - A G-meter with a peak trace
 - A five-stage shift light
 
-Status: **design only.** No Android code has been written yet. The design in this repo is the
-one to build from.
+Status: **design done, first app code written.** The app so far connects to the adapter, has
+the discovery console, and shows live engine speed with the shift lights on Android Auto. It
+has not been run on a phone or in the car yet. The gauges from the design are not built yet.
 
 ## The design
 
@@ -23,6 +24,51 @@ The phone screen for finding and checking the car's data IDs:
 
 The previews are rendered without the web font, so the lettering falls back to a local font.
 On the design canvas the numbers and labels are set in Saira.
+
+## The app (milestone 1)
+
+**What it does**
+
+- Finds the OBD adapter, over classic Bluetooth or Bluetooth LE, and sets it up for the car.
+- Discovery console on the phone: type a command, see the reply, switch between the engine
+  unit (7E0) and the gearbox unit (7E1).
+- Live engine speed, read from the engine unit as fast as the adapter allows.
+- Android Auto test screen: engine speed, the five shift lights, and connection status.
+
+**Getting the APK**
+
+Every push that touches the app is built by GitHub Actions. Open the repo's Actions tab, pick
+the latest "Build APK" run, and download the `rs-monitor-debug-apk` artifact. Unzip it and
+install `app-debug.apk` on the phone. Each build is signed with a fresh debug key, so uninstall
+the previous build before installing a new one.
+
+To build on a computer instead, open the repo in Android Studio.
+
+**First run**
+
+1. Plug the adapter into the car, switch it on, and turn the ignition on.
+2. Open RS Monitor on the phone, allow Bluetooth, and pick the adapter.
+3. In the console, send `0105`. A reply containing `41 05` means the engine unit answers
+   (that value is coolant temperature).
+4. Switch to Gearbox and send `22 F1 90`. Any reply starting `7E9` means the adapter can aim
+   a request at the gearbox unit, which is what the oil-temperature gauges depend on.
+5. Turn on live engine speed and check the number against the tachometer.
+
+**On the car screen**
+
+In Android Auto's settings on the phone, tap the version line ten times to unlock developer
+settings, then turn on "Unknown sources". RS Monitor then appears in the app list on the car
+screen.
+
+**Code layout**
+
+| Path | What it is |
+|---|---|
+| `app/src/main/java/com/rsmonitor/app/obd/` | Bluetooth links, the ELM327 command layer, reply parsing, and the shared connection |
+| `app/src/main/java/com/rsmonitor/app/ui/` | The phone screen (discovery console) |
+| `app/src/main/java/com/rsmonitor/app/car/` | The Android Auto screen and the shift-light rule |
+| `app/src/test/` | Unit tests for reply parsing and the shift-light rule |
+| `.github/workflows/build.yml` | Builds and tests the app on every push |
 
 ## What is in this repo
 
@@ -139,14 +185,22 @@ Saira throughout; numbers are bold italic at 112.5% width. The console log uses 
 First milestone: Bluetooth connection, the discovery console, and a test screen on Android
 Auto showing live RPM.
 
+## Known about the car and the adapter
+
+- **Both control units use UDS.** Checked in VCDS for engine (01) and gearbox (02). A generic
+  ELM327 can therefore read both: a `22` request plus a two-byte data ID, sent to 7E0 for the
+  engine and 7E1 for the gearbox.
+- **Adapter:** a generic ELM327 "mini" with a power button (sold as Kungfuren OBD2 4.0). It
+  must be switched on to be seen.
+
 ## Open questions
 
-1. **Protocol of the engine (01) and gearbox (02) control units: UDS or KWP2000?** VCDS shows
-   this on the control unit info screen. UDS works with a generic ELM327; KWP2000 over
-   VW TP2.0 is much harder on one. This decides whether the plan works as designed.
+1. **Does the adapter obey the command that aims a request at one control unit?** Some ELM327
+   clones ignore it. Step 4 of the first run answers this.
 2. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
-   They have to be found on the car and checked against VCDS.
-3. **Which Bluetooth adapter** will be used (classic Bluetooth or Bluetooth Low Energy).
+   They have to be found on the car and checked against the dash display and VCDS.
+3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
+   only matters for which entry to pick in the adapter list.
 4. **Hot notice wording when only one oil is hot** (engine only, gearbox only).
 5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
