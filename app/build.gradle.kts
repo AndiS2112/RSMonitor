@@ -32,6 +32,11 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -48,4 +53,6 @@ dependencies {
     implementation("androidx.car.app:app-projected:1.4.0")
 
     testImplementation("junit:junit:4.13.2")
+    // draws the gauge screen to PNG files during tests, so the design can be checked without a car
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

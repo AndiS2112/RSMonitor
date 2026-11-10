@@ -1,10 +1,8 @@
 package com.rsmonitor.app.car
 
 import android.content.Intent
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.Typeface
+import android.graphics.RectF
 import android.os.SystemClock
 import android.view.Surface
 import androidx.car.app.AppManager
@@ -39,8 +37,8 @@ class RsCarAppService : CarAppService() {
 }
 
 /**
- * Milestone 1 test screen: engine speed and the shift lights, drawn on the surface a
- * navigation-category app is given. The full gauge design replaces this drawing later.
+ * The gauge screen. A navigation-category app is given a surface to draw on, and the design
+ * is painted there by [GaugePainter].
  */
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val renderer = GaugeRenderer()
@@ -54,7 +52,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
 
         lifecycleScope.launch {
             combine(ObdHub.link, ObdHub.live, ObdHub.rpm, ObdHub.rate) { link, live, rpm, rate ->
-                GaugeRenderer.Frame(link, live, rpm, rate)
+                // Oil temperatures and g-force have no data source yet, so they stay empty.
+                GaugeFrame(connected = link == ObdHub.Link.Ready, live = live, rate = rate, rpm = rpm)
             }.collect { renderer.show(it) }
         }
         lifecycleScope.launch {
@@ -82,21 +81,13 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     }
 }
 
-/** Draws one frame onto the car's surface whenever the data changes. */
+/** Paints a frame onto the car's surface whenever the data changes. */
 class GaugeRenderer : SurfaceCallback {
-    data class Frame(val link: ObdHub.Link, val live: Boolean, val rpm: Int?, val rate: Float)
-
+    private val painter = GaugePainter()
     private var surface: Surface? = null
     private var visibleArea: Rect? = null
     private var surfaceInfo = ""
-    private var frame = Frame(ObdHub.Link.Disconnected, false, null, 0f)
-
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-    private val plain = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-    private val bold = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    private val numerals = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
+    private var frame = GaugeFrame()
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         surface = surfaceContainer.surface
@@ -115,7 +106,7 @@ class GaugeRenderer : SurfaceCallback {
         surface = null
     }
 
-    fun show(next: Frame) {
+    fun show(next: GaugeFrame) {
         frame = next
         draw()
     }
@@ -136,91 +127,14 @@ class GaugeRenderer : SurfaceCallback {
             return
         }
         try {
-            paint(canvas)
+            val area = visibleArea?.takeIf { !it.isEmpty }?.let { RectF(it) }
+                ?: RectF(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat())
+            val flashOn = (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
+            // temporary: the real screen size, to confirm the layout fits
+            val footnote = "screen $surfaceInfo · usable ${area.width().toInt()}×${area.height().toInt()}"
+            painter.paint(canvas, area, frame.copy(flashOn = flashOn), footnote)
         } finally {
             s.unlockCanvasAndPost(canvas)
         }
-    }
-
-    private fun paint(c: Canvas) {
-        val area = visibleArea?.takeIf { !it.isEmpty } ?: Rect(0, 0, c.width, c.height)
-        val h = area.height().toFloat()
-        val top = area.top.toFloat()
-        val cx = area.exactCenterX()
-
-        c.drawColor(SCREEN)
-
-        // the real size of the car's screen, needed to lay out the gauges (temporary)
-        text.typeface = plain
-        text.color = SECONDARY
-        text.textSize = h * 0.032f
-        c.drawText(
-            "screen $surfaceInfo · usable ${area.width()}×${area.height()} from (${area.left}, ${area.top})",
-            cx, top + h * 0.035f, text,
-        )
-
-        // title
-        text.typeface = bold
-        text.color = INK
-        text.textSize = h * 0.05f
-        text.letterSpacing = 0.3f
-        c.drawText("RS MONITOR", cx, top + h * 0.10f, text)
-        text.letterSpacing = 0f
-
-        // shift lights
-        val rpm = frame.rpm
-        val colours = if (rpm != null) ShiftLights.colours(rpm) else List(ShiftLights.ON_AT.size) { null }
-        val flashing = rpm != null && ShiftLights.isFlashing(rpm)
-        val dimPhase = flashing && (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 1L
-        val r = h * 0.04f
-        val gap = h * 0.035f
-        val rowWidth = colours.size * 2 * r + (colours.size - 1) * gap
-        var x = cx - rowWidth / 2 + r
-        val y = top + h * 0.22f
-        stroke.strokeWidth = (h * 0.004f).coerceAtLeast(1f)
-        for (colour in colours) {
-            if (colour != null && !dimPhase) {
-                fill.color = colour
-                c.drawCircle(x, y, r, fill)
-            } else {
-                fill.color = SOCKET
-                c.drawCircle(x, y, r, fill)
-                stroke.color = LINE
-                c.drawCircle(x, y, r, stroke)
-            }
-            x += 2 * r + gap
-        }
-
-        // engine speed
-        text.typeface = numerals
-        text.color = INK
-        text.textSize = h * 0.30f
-        c.drawText(rpm?.toString() ?: "–", cx, top + h * 0.66f, text)
-        text.typeface = bold
-        text.color = LABEL
-        text.textSize = h * 0.05f
-        text.letterSpacing = 0.16f
-        c.drawText("RPM", cx, top + h * 0.76f, text)
-        text.letterSpacing = 0f
-
-        // status
-        text.typeface = plain
-        text.color = SECONDARY
-        text.textSize = h * 0.045f
-        val status = when {
-            frame.link != ObdHub.Link.Ready -> "Adapter not connected. Open RS Monitor on the phone."
-            !frame.live -> "Connected. Live data is off."
-            else -> "OBD · ${"%.0f".format(frame.rate)} Hz"
-        }
-        c.drawText(status, cx, top + h * 0.92f, text)
-    }
-
-    private companion object {
-        val SCREEN = 0xFF18181A.toInt()
-        val SOCKET = 0xFF0B0B0C.toInt()
-        val LINE = 0xFF3A3A3E.toInt()
-        val INK = 0xFFFFFFFF.toInt()
-        val LABEL = 0xFFD6D6D6.toInt()
-        val SECONDARY = 0xFFA8A8AE.toInt()
     }
 }

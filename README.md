@@ -8,9 +8,9 @@ It shows three things on the car screen:
 - A G-meter with a peak trace
 - A five-stage shift light
 
-Status: **design done, first app code written.** The app so far connects to the adapter, has
-the discovery console, and shows live engine speed with the shift lights on Android Auto. It
-has not been run on a phone or in the car yet. The gauges from the design are not built yet.
+Status: **design done, app partly built.** In the car, the app connects to the adapter,
+reaches the engine and gearbox, and shows on Android Auto with live engine speed. The gauge
+screen from the design is drawn, but the oil temperatures and the G-meter have no data yet.
 
 ## The design
 
@@ -33,7 +33,9 @@ On the design canvas the numbers and labels are set in Saira.
 - Discovery console on the phone: type a command, see the reply, switch between the engine
   unit (7E0) and the gearbox unit (7E1).
 - Live engine speed, read from the engine unit as fast as the adapter allows.
-- Android Auto test screen: engine speed, the five shift lights, and connection status.
+- Android Auto gauge screen, drawn from the design: the three gauges, the shift lights and
+  the notice. Only the shift lights have live data so far. The oil gauges show a dash until
+  their data IDs are found, and the G-meter shows dashes until the motion sensor is wired in.
 
 **Getting the APK**
 
@@ -66,16 +68,15 @@ the gearbox, against a VCDS reading).
 
 Installing the APK the normal way is not enough. Android Auto only shows an app built with the
 Car App Library if Android has it recorded as installed from Google Play, and the "Unknown
-sources" developer setting does not change that for this kind of app. Two ways round it:
+sources" developer setting does not change that for this kind of app.
 
-- **From a computer:** turn on USB debugging on the phone, uninstall RS Monitor, then install
-  with `adb install -i com.android.vending app-debug.apk`.
-- **Through Google Play:** upload the app to a Play Console internal test track and install it
-  from there. This is the route Google documents for testing in a real car.
+- **What works on this phone:** installing the APK with the UnknownAuto tool
+  (github.com/GitMag/UnknownAuto), which uses Shizuku to record Google Play as the installer.
+- **Not tried:** from a computer, `adb install -i com.android.vending app-debug.apk`.
+- **The route Google documents:** a Play Console internal test track.
 
-After installing, reconnect the phone to the car. If RS Monitor is still missing, check
-"Customize launcher" in Android Auto's settings on the phone. The `adb` route has not been
-confirmed on this phone yet.
+After installing, reconnect the phone to the car. If RS Monitor is missing, check "Customize
+launcher" in Android Auto's settings on the phone.
 
 **Code layout**
 
@@ -84,7 +85,7 @@ confirmed on this phone yet.
 | `app/src/main/java/com/rsmonitor/app/obd/` | Bluetooth links, the ELM327 command layer, reply parsing, and the shared connection |
 | `app/src/main/java/com/rsmonitor/app/ui/` | The phone screen (discovery console) |
 | `app/src/main/java/com/rsmonitor/app/car/` | The Android Auto screen and the shift-light rule |
-| `app/src/test/` | Unit tests for reply parsing and the shift-light rule |
+| `app/src/test/` | Unit tests for reply parsing and the shift-light rule, and a test that draws the gauge screen to PNG files |
 | `.github/workflows/build.yml` | Builds and tests the app on every push |
 
 ## What is in this repo

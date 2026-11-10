@@ -28,6 +28,13 @@ jobs:
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gauge-previews
+          path: app/build/outputs/gauge-previews/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
         with:
           name: rs-monitor-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
