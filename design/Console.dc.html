@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Discovery console</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFFFFF}a:hover{color:#D6D6D6}
+::selection{background:#FF1A1A;color:#FFFFFF}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}
+input::placeholder{color:#A8A8AE;opacity:1}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #18181A; color: #FFFFFF; font-family: 'Saira', system-ui, sans-serif; display: flex; flex-direction: column; padding: 56px 20px 28px; gap: 18px">
+<header style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-family: 'Saira', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: 0.01em">Discovery console</h1>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #A8A8AE">
+<span style="width: 8px; height: 8px; border-radius: 4px; background: #FFFFFF"></span>OBDII adapter · connected · ELM327 v1.5
+</div>
+</header>
+
+<div role="group" aria-label="Target control unit" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; background: #222225; border-radius: 12px; padding: 4px">
+<button style="height: 44px; border: none; border-radius: 9px; background: transparent; color: #D6D6D6; font-family: 'Saira', sans-serif; font-size: 14px; font-weight: 500">Engine · 7E0</button>
+<button aria-pressed="true" style="height: 44px; border: none; border-radius: 9px; background: #3A3A3E; color: #FFFFFF; font-family: 'Saira', sans-serif; font-size: 14px; font-weight: 600">Gearbox · 7E1</button>
+</div>
+
+<section aria-label="Log" style="flex: 1; background: #0B0B0C; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 9px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.35; overflow: hidden">
+<sc-for list="{{log}}" as="row" hint-placeholder-count="9">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; gap: 10px"><span style="color: #A8A8AE">›</span><span style="color: #FFFFFF">{{row.cmd}}</span></div>
+<div style="padding-left: 18px; color: {{row.color}}">{{row.reply}}</div>
+</div>
+</sc-for>
+</section>
+
+<section aria-label="Decode candidate" style="background: #222225; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<div style="font-family: 'Saira', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: #D6D6D6">DECODE CHECK</div>
+<div style="font-size: 12px; color: #A8A8AE">vs VCDS reading</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12px; color: #A8A8AE">Raw</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 15px">0x7B</div></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12px; color: #A8A8AE">Formula</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 15px">A − 40</div></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 12px; color: #A8A8AE">Result</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 15px">83 °C</div></div>
+</div>
+</section>
+
+<form style="display: flex; gap: 8px" aria-label="Send command">
+<label for="cmd" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Command</label>
+<input id="cmd" type="text" placeholder="22 [ID]" style="flex: 1; height: 48px; box-sizing: border-box; border-radius: 12px; border: 1px solid #6A6A70; background: #18181A; color: #FFFFFF; padding: 0 14px; font-family: 'JetBrains Mono', monospace; font-size: 15px">
+<button type="button" style="height: 48px; padding: 0 20px; border: none; border-radius: 12px; background: #FFFFFF; color: #0B0B0C; font-family: 'Saira', sans-serif; font-size: 15px; font-weight: 600">Send</button>
+</form>
+
+<a href="Main.dc.html" style="height: 48px; border-radius: 12px; border: 1px solid #6A6A70; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #FFFFFF; font-size: 15px; font-weight: 500">Add as gauge</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var ok = '#A8A8AE', hit = '#FFFFFF', miss = '#FF5A4A', wait = '#F5A623';
+    return {
+      log: [
+        { cmd: 'ATZ', reply: 'ELM327 v1.5', color: ok },
+        { cmd: 'ATE0 · ATL0 · ATS0 · ATH1', reply: 'OK', color: ok },
+        { cmd: 'ATSP6', reply: 'OK  (CAN 11-bit, 500k)', color: ok },
+        { cmd: 'ATSH7E0', reply: 'OK', color: ok },
+        { cmd: '0105', reply: '7E8 03 41 05 7B  → coolant 83 °C', color: hit },
+        { cmd: '015C', reply: 'NO DATA  (oil temp not on generic PID)', color: miss },
+        { cmd: 'ATSH7E1', reply: 'OK', color: ok },
+        { cmd: '22 [ID]', reply: 'waiting for candidate ID…', color: wait }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
