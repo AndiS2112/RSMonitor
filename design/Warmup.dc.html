@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>RS5 gauges — cold start</title>
+<title>RS Monitor — cold start</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -13,6 +13,8 @@
 <style>
 body{margin:0}
 a{color:#FFFFFF}a:hover{color:#D6D6D6}
+::selection{background:#FF1A1A;color:#FFFFFF}
+button:focus-visible,a:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}
 </style>
 </helmet>
 <div style="width: 800px; height: 480px; box-sizing: border-box; display: flex; background: #18181A; color: #FFFFFF; font-family: 'Saira', 'Inter', sans-serif; overflow: hidden">
@@ -31,22 +33,18 @@ a{color:#FFFFFF}a:hover{color:#D6D6D6}
 <div style="font-size: 15px; font-weight: 500; color: #E8ECEF">21:21</div>
 </nav>
 <main style="flex: 1; display: flex; flex-direction: column; padding: 12px 14px 14px; box-sizing: border-box; gap: 4px">
-<header style="display: flex; align-items: center; justify-content: space-between; height: 24px">
-<div style="width: 120px; font-size: 14px; font-weight: 600; letter-spacing: 0.14em">LIVE</div>
-<div style="font-family: 'Saira', 'Inter', sans-serif; font-size: 17px; font-weight: 600; letter-spacing: 0.32em; color: #FFFFFF">RS MONITOR</div>
-<div style="width: 120px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; color: #9A9A9A; letter-spacing: 0.06em">
+<header style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 24px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.16em">LIVE</div>
+<div style="padding-left: 0.32em; font-size: 17px; font-weight: 600; letter-spacing: 0.32em">RS MONITOR</div>
+<div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 13px; font-weight: 500; color: #A8A8AE; letter-spacing: 0.06em">
 <span style="width: 7px; height: 7px; border-radius: 4px; background: #FFFFFF"></span>OBD · 14 Hz
 </div>
 </header>
-<div role="status" style="display: flex; align-items: center; gap: 10px; border: 1px solid #3A3A3E; border-radius: 8px; padding: 6px 14px; font-family: 'Saira', 'Inter', sans-serif; font-size: 13px; color: #D6D6D6">
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg>
-Engine and gearbox still cold — oil below 80 °C
-</div>
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
-<div style="display: flex; flex-direction: column; gap: 10px; width: 232px; flex-shrink: 0;">
-<div style="position: relative; width: 232px; height: 232px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 232px; height: 324px; padding-top: 46px; box-sizing: border-box; flex-shrink: 0;">
+<div style="position: relative; width: 232px; height: 232px; flex-shrink: 0">
 <svg width="232" height="232" viewBox="0 0 232 232" aria-hidden="true">
-<defs><linearGradient id="chromeoil" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossoil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient></defs>
+<defs><linearGradient id="chromeoil" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossoil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient><linearGradient id="silveroil" x1="0" y1="0" x2="0.25" y2="1"><stop offset="0" stop-color="#F0F0F4"></stop><stop offset="0.55" stop-color="#8E8E94"></stop><stop offset="1" stop-color="#C8C8CC"></stop></linearGradient></defs>
 <circle cx="116.0" cy="116.0" r="113.0" fill="#222225" stroke="url(#chromeoil)" stroke-width="5"></circle>
 <circle cx="116.0" cy="116.0" r="95.5" fill="none" stroke="url(#glossoil)" stroke-width="29"></circle>
 <circle cx="116.0" cy="116.0" r="81.0" fill="none" stroke="#3A3A3E" stroke-width="1"></circle>
@@ -71,9 +69,9 @@ Engine and gearbox still cold — oil below 80 °C
 <circle cx="51.8" cy="44.7" r="2.645" fill="#FF1A1A"></circle>
 <circle cx="59.6" cy="38.3" r="1.725" fill="#FF1A1A"></circle>
 <line x1="65.0" y1="27.7" x2="72.0" y2="39.8" stroke="#FF1A1A" stroke-width="5" stroke-linecap="round"></line>
-<text x="84.0" y="179.4" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">50</text>
-<text x="52.0" y="124.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">100</text>
-<text x="84.0" y="68.6" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FF1A1A">150</text>
+<text x="86.2" y="174.9" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">50</text>
+<text x="63.5" y="123.3" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">100</text>
+<text x="88.5" y="75.7" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FF1A1A">150</text>
 </svg>
 <div style="position: absolute; left: 92px; top: 92px; width: 48px; height: 48px; border-radius: 24px; background: linear-gradient(150deg, #4E4E54 0%, #161618 32%, #2A2A2E 52%, #F0F0F4 78%, #8C8C92 100%); box-shadow: 0 2px 5px rgba(0,0,0,0.6)"></div>
 <div style="position: absolute; left: 94.5px; top: 94.5px; width: 43px; height: 43px; border-radius: 22px; background: radial-gradient(circle at 50% 42%, #1E1E21 0%, #0E0E10 55%, #050506 100%); box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 -1px 1px rgba(255,255,255,0.06)"></div>
@@ -84,16 +82,18 @@ Engine and gearbox still cold — oil below 80 °C
 <div style="width: 18px; height: 61px; background: linear-gradient(90deg, #060607 0%, #45454B 10%, #111113 20%, #0B0B0C 36%, #303035 44%, #55555C 50%, #303035 56%, #0B0B0C 64%, #111113 80%, #45454B 90%, #060607 100%); clip-path: polygon(30% 0%, 70% 0%, 70% 7%, 84% 11%, 100% 66%, 100% 93%, 84% 100%, 16% 100%, 0% 93%, 0% 66%, 16% 11%, 30% 7%)"></div>
 </div>
 <div style="position: absolute; left: 114px; top: 114px; width: 4px; height: 4px; border-radius: 2px; background: #000000; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)"></div>
-<svg width="38" height="38" viewBox="0 0 36 36" fill="none" stroke="#D2D2D6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Engine oil temperature" style="position: absolute; left: 144px; top: 90px"><path d="M9 20H21L29 15.5L31 17.5L22.5 28H9Z" fill="#D2D2D6" stroke-width="1.2"></path><path d="M9 23.5L4.5 21.5V18.5L9 20.5" stroke-width="2"></path><path d="M32.5 20.5q-1.8 2.8 0 3.9q1.8-1.1 0-3.9z" fill="#D2D2D6" stroke="none"></path><rect x="13.2" y="4.5" width="4" height="17" rx="2" fill="#D2D2D6" stroke="none"></rect><path d="M18.6 7.5h3M18.6 11h3M18.6 14.5h3" stroke-width="1.6"></path></svg>
-<div style="position: absolute; left: 106px; top: 170px; width: 80px; text-align: center; font-family: 'Saira', 'Inter', sans-serif; font-style: italic; font-size: 24px; font-weight: 700; color: {{oil.color}}; font-variant-numeric: tabular-nums">{{oil.value}}<span style="font-size: 13px; font-weight: 600"> °C</span></div>
+<svg width="32" height="32" viewBox="0 0 36 36" fill="none" stroke="#D2D2D6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Engine oil temperature" style="position: absolute; left: 147px; top: 100px"><path d="M9 20H21L29 15.5L31 17.5L22.5 28H9Z" fill="#D2D2D6" stroke-width="1.2"></path><path d="M9 23.5L4.5 21.5V18.5L9 20.5" stroke-width="2"></path><path d="M32.5 20.5q-1.8 2.8 0 3.9q1.8-1.1 0-3.9z" fill="#D2D2D6" stroke="none"></path><rect x="13.2" y="4.5" width="4" height="17" rx="2" fill="#D2D2D6" stroke="none"></rect><path d="M18.6 7.5h3M18.6 11h3M18.6 14.5h3" stroke-width="1.6"></path></svg>
 </div>
-<div style="align-self: flex-start; width: 186px; text-align: center; font-family: 'Saira', 'Inter', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: #D6D6D6">ENGINE OIL</div>
+<div style="display: flex; flex-direction: row; align-items: baseline; justify-content: center; gap: 10px; white-space: nowrap; font-family: 'Saira', 'Inter', sans-serif">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: #D6D6D6">ENGINE OIL</div>
+<div style="min-width: 72px; text-align: left; font-size: 21px; font-style: italic; font-weight: 700; font-stretch: 112.5%; font-variant-numeric: tabular-nums; color: {{oil.color}}">{{oil.value}}<span style="font-size: 13px; font-weight: 600; font-stretch: 100%"> °C</span></div>
 </div>
-<div style="position: relative; z-index: 1; width: 324px; height: 324px; flex-shrink: 0; margin-left: -46px; border-radius: 162px; box-shadow: 0 0 0 6px #18181A">
+</div>
+<div style="position: relative; z-index: 1; width: 324px; height: 324px; flex-shrink: 0; margin-left: -40px; border-radius: 162px; box-shadow: 0 0 0 6px #18181A, 0 10px 24px 2px rgba(0,0,0,0.5)">
 <svg width="324" height="324" viewBox="0 0 324 324" role="img" aria-label="G-meter with peak trace">
-<defs><linearGradient id="chromeg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient></defs>
+<defs><linearGradient id="chromeg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient><linearGradient id="silverg" x1="0" y1="0" x2="0.25" y2="1"><stop offset="0" stop-color="#F0F0F4"></stop><stop offset="0.55" stop-color="#8E8E94"></stop><stop offset="1" stop-color="#C8C8CC"></stop></linearGradient></defs>
 <circle cx="162.0" cy="162.0" r="158.0" fill="#222225" stroke="url(#chromeg)" stroke-width="7"></circle>
-<circle cx="162.0" cy="162.0" r="150.0" fill="none" stroke="#3C3C40" stroke-width="1"></circle>
+<circle cx="162.0" cy="162.0" r="150.0" fill="none" stroke="#3A3A3E" stroke-width="1"></circle>
 <circle cx="198.8" cy="24.8" r="1.61" fill="#FFFFFF"></circle>
 <circle cx="233.0" cy="39.0" r="1.61" fill="#FFFFFF"></circle>
 <circle cx="262.4" cy="61.6" r="2.53" fill="#FFFFFF"></circle>
@@ -114,25 +114,25 @@ Engine and gearbox still cold — oil below 80 °C
 <circle cx="61.6" cy="61.6" r="2.53" fill="#FFFFFF"></circle>
 <circle cx="91.0" cy="39.0" r="1.61" fill="#FFFFFF"></circle>
 <circle cx="125.2" cy="24.8" r="1.61" fill="#FFFFFF"></circle>
-<circle cx="162.0" cy="162.0" r="100.0" fill="#B9B9BC"></circle>
-<circle cx="162.0" cy="162.0" r="95.0" fill="#1C1C20"></circle>
-<circle cx="162.0" cy="162.0" r="93.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
-<circle cx="162.0" cy="162.0" r="62.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
-<circle cx="162.0" cy="162.0" r="31.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
-<polygon points="162.0,157.2 162.5,157.0 162.9,157.8 163.4,157.6 163.9,157.7 164.2,158.2 165.1,157.8 165.5,158.1 165.7,158.6 166.6,158.6 166.5,159.4 166.6,160.0 167.5,160.2 167.3,160.9 167.7,161.4 168.4,162.0 167.6,162.6 167.7,163.2 167.7,163.9 166.8,164.1 167.2,165.0 167.1,165.7 166.4,166.0 166.6,167.2 165.9,167.4 165.0,167.3 164.8,168.3 164.0,168.1 163.3,168.2 162.8,169.5 162.0,168.9 161.3,169.0 160.5,169.2 160.1,167.8 159.4,167.7 158.8,167.6 158.7,166.6 157.8,166.7 157.4,166.2 157.6,165.2 157.0,164.9 157.2,164.1 157.5,163.5 156.7,163.1 156.9,162.5 156.9,162.0 156.2,161.4 157.1,161.0 157.3,160.5 157.2,159.9 158.1,159.8 158.0,159.1 158.1,158.5 158.9,158.5 159.0,157.8 159.5,157.7 160.3,158.1 160.5,157.5 161.1,157.6 161.5,157.7" fill="#C8102E" fill-opacity="0.45" stroke="#FF2A3D" stroke-width="2" stroke-linejoin="round"></polygon>
-<line x1="69.0" y1="162.0" x2="255.0" y2="162.0" stroke="#8E8E94" stroke-width="1"></line>
-<line x1="162.0" y1="69.0" x2="162.0" y2="255.0" stroke="#8E8E94" stroke-width="1"></line>
+<circle cx="162.0" cy="162.0" r="97.0" fill="url(#silverg)"></circle>
+<circle cx="162.0" cy="162.0" r="92.0" fill="#1C1C20"></circle>
+<circle cx="162.0" cy="162.0" r="90.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
+<circle cx="162.0" cy="162.0" r="60.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
+<circle cx="162.0" cy="162.0" r="30.0" fill="none" stroke="#5A5A60" stroke-width="1.5"></circle>
+<polygon points="162.0,157.2 162.3,157.2 162.7,157.3 163.0,157.3 163.3,157.4 163.6,157.5 163.9,157.6 164.3,157.8 164.6,157.9 164.9,158.0 165.2,158.1 165.6,158.3 165.9,158.5 166.1,158.8 166.4,159.0 166.6,159.4 166.7,159.7 166.9,160.0 167.0,160.4 167.1,160.7 167.3,161.1 167.4,161.4 167.5,161.8 167.6,162.2 167.6,162.6 167.7,163.0 167.6,163.4 167.6,163.8 167.5,164.2 167.4,164.6 167.2,165.0 167.0,165.4 166.8,165.8 166.6,166.2 166.4,166.6 166.2,167.0 165.9,167.4 165.6,167.7 165.2,168.0 164.8,168.3 164.4,168.5 163.9,168.6 163.4,168.6 162.9,168.6 162.5,168.6 162.0,168.6 161.5,168.5 161.1,168.4 160.7,168.3 160.2,168.2 159.8,168.0 159.4,167.8 159.1,167.5 158.8,167.2 158.5,166.8 158.3,166.5 158.0,166.1 157.8,165.8 157.6,165.4 157.4,165.1 157.2,164.7 157.1,164.4 156.9,164.1 156.8,163.7 156.7,163.3 156.6,162.9 156.6,162.6 156.7,162.2 156.8,161.8 156.9,161.5 157.0,161.1 157.1,160.8 157.3,160.5 157.4,160.1 157.6,159.8 157.7,159.5 157.9,159.3 158.2,159.0 158.5,158.8 158.7,158.6 159.0,158.5 159.3,158.3 159.6,158.2 159.9,158.1 160.2,157.9 160.5,157.8 160.8,157.7 161.0,157.5 161.4,157.4 161.7,157.3" fill="#FF1A1A" fill-opacity="0.32" stroke="#FF1A1A" stroke-width="2" stroke-linejoin="round"></polygon>
+<line x1="72.0" y1="162.0" x2="252.0" y2="162.0" stroke="#8E8E94" stroke-width="1"></line>
+<line x1="162.0" y1="72.0" x2="162.0" y2="252.0" stroke="#8E8E94" stroke-width="1"></line>
 <circle cx="{{g.x}}" cy="{{g.y}}" r="11" fill="#FFFFFF"></circle>
-<text x="162.0" y="45.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="19" font-style="italic" fill="#F5A623">0.08</text>
-<text x="162.0" y="293.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="19" font-style="italic" fill="#F5A623">0.12</text>
-<text x="36.0" y="169.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="19" font-style="italic" fill="#F5A623">0.09</text>
-<text x="288.0" y="169.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="19" font-style="italic" fill="#F5A623">0.10</text>
+<text x="162.0" y="44.8" text-anchor="middle" font-size="18" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#F5A623">0.08</text>
+<text x="162.0" y="291.8" text-anchor="middle" font-size="18" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#F5A623">0.12</text>
+<text x="38.5" y="168.3" text-anchor="middle" font-size="18" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#F5A623">0.09</text>
+<text x="285.5" y="168.3" text-anchor="middle" font-size="18" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#F5A623">0.10</text>
 </svg>
 </div>
-<div style="display: flex; flex-direction: column; gap: 10px; width: 232px; flex-shrink: 0; margin-left: -46px;">
-<div style="position: relative; width: 232px; height: 232px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 232px; height: 324px; padding-top: 46px; box-sizing: border-box; flex-shrink: 0; margin-left: -40px;">
+<div style="position: relative; width: 232px; height: 232px; flex-shrink: 0">
 <svg width="232" height="232" viewBox="0 0 232 232" aria-hidden="true">
-<defs><linearGradient id="chromegear" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossgear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient></defs>
+<defs><linearGradient id="chromegear" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#F2F2F2"></stop><stop offset="0.45" stop-color="#7C7C80"></stop><stop offset="0.7" stop-color="#2A2A2C"></stop><stop offset="1" stop-color="#9A9A9E"></stop></linearGradient><linearGradient id="glossgear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E2E32"></stop><stop offset="0.22" stop-color="#050506"></stop><stop offset="0.8" stop-color="#000000"></stop><stop offset="1" stop-color="#151517"></stop></linearGradient><linearGradient id="silvergear" x1="0" y1="0" x2="0.25" y2="1"><stop offset="0" stop-color="#F0F0F4"></stop><stop offset="0.55" stop-color="#8E8E94"></stop><stop offset="1" stop-color="#C8C8CC"></stop></linearGradient></defs>
 <circle cx="116.0" cy="116.0" r="113.0" fill="#222225" stroke="url(#chromegear)" stroke-width="5"></circle>
 <circle cx="116.0" cy="116.0" r="95.5" fill="none" stroke="url(#glossgear)" stroke-width="29"></circle>
 <circle cx="116.0" cy="116.0" r="81.0" fill="none" stroke="#3A3A3E" stroke-width="1"></circle>
@@ -153,9 +153,9 @@ Engine and gearbox still cold — oil below 80 °C
 <circle cx="189.5" cy="54.3" r="2.645" fill="#FF1A1A"></circle>
 <circle cx="177.7" cy="42.5" r="1.725" fill="#FF1A1A"></circle>
 <line x1="167.0" y1="27.7" x2="160.0" y2="39.8" stroke="#FF1A1A" stroke-width="5" stroke-linecap="round"></line>
-<text x="148.0" y="179.4" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">50</text>
-<text x="180.0" y="124.0" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">100</text>
-<text x="148.0" y="68.6" text-anchor="middle" font-family="Saira, sans-serif" font-weight="700" font-size="24" font-style="italic" style="font-stretch: 112.5%" fill="#FF1A1A">130</text>
+<text x="145.8" y="174.9" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">50</text>
+<text x="168.5" y="123.3" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FFFFFF">100</text>
+<text x="143.5" y="75.7" text-anchor="middle" font-size="21" font-family="Saira, sans-serif" font-weight="700" font-style="italic" style="font-stretch: 112.5%" fill="#FF1A1A">130</text>
 </svg>
 <div style="position: absolute; left: 92px; top: 92px; width: 48px; height: 48px; border-radius: 24px; background: linear-gradient(150deg, #4E4E54 0%, #161618 32%, #2A2A2E 52%, #F0F0F4 78%, #8C8C92 100%); box-shadow: 0 2px 5px rgba(0,0,0,0.6)"></div>
 <div style="position: absolute; left: 94.5px; top: 94.5px; width: 43px; height: 43px; border-radius: 22px; background: radial-gradient(circle at 50% 42%, #1E1E21 0%, #0E0E10 55%, #050506 100%); box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 -1px 1px rgba(255,255,255,0.06)"></div>
@@ -166,12 +166,18 @@ Engine and gearbox still cold — oil below 80 °C
 <div style="width: 18px; height: 61px; background: linear-gradient(90deg, #060607 0%, #45454B 10%, #111113 20%, #0B0B0C 36%, #303035 44%, #55555C 50%, #303035 56%, #0B0B0C 64%, #111113 80%, #45454B 90%, #060607 100%); clip-path: polygon(30% 0%, 70% 0%, 70% 7%, 84% 11%, 100% 66%, 100% 93%, 84% 100%, 16% 100%, 0% 93%, 0% 66%, 16% 11%, 30% 7%)"></div>
 </div>
 <div style="position: absolute; left: 114px; top: 114px; width: 4px; height: 4px; border-radius: 2px; background: #000000; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)"></div>
-<svg width="38" height="38" viewBox="0 0 36 36" fill="none" stroke="#D2D2D6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Gearbox oil temperature" style="position: absolute; left: 50px; top: 90px"><circle cx="15" cy="21" r="8.2" stroke-width="3"></circle><line x1="18.6" y1="12.3" x2="19.9" y2="9.2" stroke-width="3.6" stroke-linecap="butt"></line><line x1="23.7" y1="17.4" x2="26.8" y2="16.1" stroke-width="3.6" stroke-linecap="butt"></line><line x1="23.7" y1="24.6" x2="26.8" y2="25.9" stroke-width="3.6" stroke-linecap="butt"></line><line x1="18.6" y1="29.7" x2="19.9" y2="32.8" stroke-width="3.6" stroke-linecap="butt"></line><line x1="11.4" y1="29.7" x2="10.1" y2="32.8" stroke-width="3.6" stroke-linecap="butt"></line><line x1="6.3" y1="24.6" x2="3.2" y2="25.9" stroke-width="3.6" stroke-linecap="butt"></line><line x1="6.3" y1="17.4" x2="3.2" y2="16.1" stroke-width="3.6" stroke-linecap="butt"></line><line x1="11.4" y1="12.3" x2="10.1" y2="9.2" stroke-width="3.6" stroke-linecap="butt"></line><path d="M15 14.5v6" stroke-width="2.2"></path><circle cx="15" cy="22.6" r="2.7" fill="#D2D2D6" stroke="none"></circle><circle cx="28.5" cy="8.5" r="3" stroke-width="2.2"></circle><line x1="28.5" y1="4.6" x2="28.5" y2="2.3" stroke-width="2.2" stroke-linecap="butt"></line><line x1="31.3" y1="5.7" x2="32.9" y2="4.1" stroke-width="2.2" stroke-linecap="butt"></line><line x1="32.4" y1="8.5" x2="34.7" y2="8.5" stroke-width="2.2" stroke-linecap="butt"></line><line x1="31.3" y1="11.3" x2="32.9" y2="12.9" stroke-width="2.2" stroke-linecap="butt"></line><line x1="28.5" y1="12.4" x2="28.5" y2="14.7" stroke-width="2.2" stroke-linecap="butt"></line><line x1="25.7" y1="11.3" x2="24.1" y2="12.9" stroke-width="2.2" stroke-linecap="butt"></line><line x1="24.6" y1="8.5" x2="22.3" y2="8.5" stroke-width="2.2" stroke-linecap="butt"></line><line x1="25.7" y1="5.7" x2="24.1" y2="4.1" stroke-width="2.2" stroke-linecap="butt"></line></svg>
-<div style="position: absolute; left: 46px; top: 170px; width: 80px; text-align: center; font-family: 'Saira', 'Inter', sans-serif; font-style: italic; font-size: 24px; font-weight: 700; color: {{gear.color}}; font-variant-numeric: tabular-nums">{{gear.value}}<span style="font-size: 13px; font-weight: 600"> °C</span></div>
+<svg width="32" height="32" viewBox="0 0 36 36" fill="none" stroke="#D2D2D6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Gearbox oil temperature" style="position: absolute; left: 53px; top: 100px"><circle cx="15" cy="21" r="8.2" stroke-width="3"></circle><line x1="18.6" y1="12.3" x2="19.9" y2="9.2" stroke-width="3.6" stroke-linecap="butt"></line><line x1="23.7" y1="17.4" x2="26.8" y2="16.1" stroke-width="3.6" stroke-linecap="butt"></line><line x1="23.7" y1="24.6" x2="26.8" y2="25.9" stroke-width="3.6" stroke-linecap="butt"></line><line x1="18.6" y1="29.7" x2="19.9" y2="32.8" stroke-width="3.6" stroke-linecap="butt"></line><line x1="11.4" y1="29.7" x2="10.1" y2="32.8" stroke-width="3.6" stroke-linecap="butt"></line><line x1="6.3" y1="24.6" x2="3.2" y2="25.9" stroke-width="3.6" stroke-linecap="butt"></line><line x1="6.3" y1="17.4" x2="3.2" y2="16.1" stroke-width="3.6" stroke-linecap="butt"></line><line x1="11.4" y1="12.3" x2="10.1" y2="9.2" stroke-width="3.6" stroke-linecap="butt"></line><path d="M15 14.5v6" stroke-width="2.2"></path><circle cx="15" cy="22.6" r="2.7" fill="#D2D2D6" stroke="none"></circle><circle cx="28.5" cy="8.5" r="3" stroke-width="2.2"></circle><line x1="28.5" y1="4.6" x2="28.5" y2="2.3" stroke-width="2.2" stroke-linecap="butt"></line><line x1="31.3" y1="5.7" x2="32.9" y2="4.1" stroke-width="2.2" stroke-linecap="butt"></line><line x1="32.4" y1="8.5" x2="34.7" y2="8.5" stroke-width="2.2" stroke-linecap="butt"></line><line x1="31.3" y1="11.3" x2="32.9" y2="12.9" stroke-width="2.2" stroke-linecap="butt"></line><line x1="28.5" y1="12.4" x2="28.5" y2="14.7" stroke-width="2.2" stroke-linecap="butt"></line><line x1="25.7" y1="11.3" x2="24.1" y2="12.9" stroke-width="2.2" stroke-linecap="butt"></line><line x1="24.6" y1="8.5" x2="22.3" y2="8.5" stroke-width="2.2" stroke-linecap="butt"></line><line x1="25.7" y1="5.7" x2="24.1" y2="4.1" stroke-width="2.2" stroke-linecap="butt"></line></svg>
 </div>
-<div style="align-self: flex-end; width: 186px; text-align: center; font-family: 'Saira', 'Inter', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: #D6D6D6">GEARBOX OIL</div>
+<div style="display: flex; flex-direction: row-reverse; align-items: baseline; justify-content: center; gap: 10px; white-space: nowrap; font-family: 'Saira', 'Inter', sans-serif">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: #D6D6D6">GEARBOX OIL</div>
+<div style="min-width: 72px; text-align: right; font-size: 21px; font-style: italic; font-weight: 700; font-stretch: 112.5%; font-variant-numeric: tabular-nums; color: {{gear.color}}">{{gear.value}}<span style="font-size: 13px; font-weight: 600; font-stretch: 100%"> °C</span></div>
 </div>
 </div>
+</div>
+<div style="height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center"><div role="status" style="display: flex; align-items: center; gap: 8px; height: 30px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid #3A3A3E; border-radius: 15px; background: #222225; font-size: 13px; font-weight: 500; color: #D6D6D6; white-space: nowrap">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg>
+Engine and gearbox still cold — oil below 80 °C
+</div></div>
 </main>
 </div>
 </x-dc>
@@ -188,7 +194,7 @@ class Component extends DCLogic {
     return {
       oil: this.needle(this.props.oilTemp ?? 46, 50, 150, 130, -1),
       gear: this.needle(this.props.gearTemp ?? 38, 50, 130, 120, 1),
-      g: { x: (162.0 + lat * 62).toFixed(1), y: (162.0 - lon * 62).toFixed(1) }
+      g: { x: (162.0 + lat * 60).toFixed(1), y: (162.0 - lon * 60).toFixed(1) }
     };
   }
 }
