@@ -64,7 +64,9 @@ python3 tools/render_preview.py design design/preview
 
 - **Cold start:** notice "Engine and gearbox still cold — oil below 80 °C".
 - **Driving:** no notice.
-- **Hot:** the reading turns red once the oil is in its hot zone. There is no hot notice yet.
+- **Hot:** the reading turns red once the oil is in its hot zone, and a filled red warning
+  notice appears: "Engine and gearbox oil hot — above 130 °C and 120 °C". It is deliberately
+  bolder than the cold notice. The wording for only one oil being hot is not written yet.
 
 **Scales**
 
@@ -97,6 +99,7 @@ python3 tools/render_preview.py design design/preview
 | Hairlines | `#3A3A3E` |
 | Text | `#FFFFFF`, labels `#D6D6D6`, secondary `#A8A8AE` |
 | Hot zone, hot reading, G trace | `#FF1A1A` |
+| Hot notice fill | `#C8101A` |
 | G-meter peak numbers, "waiting" in the console | `#F5A623` |
 
 Saira throughout; numbers are bold italic at 112.5% width. The console log uses JetBrains Mono.
@@ -122,4 +125,4 @@ Auto showing live RPM.
 2. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
    They have to be found on the car and checked against VCDS.
 3. **Which Bluetooth adapter** will be used (classic Bluetooth or Bluetooth Low Energy).
-4. **Whether the hot state needs its own notice**, like the cold one.
+4. **Hot notice wording when only one oil is hot** (engine only, gearbox only).

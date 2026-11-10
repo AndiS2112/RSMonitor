@@ -204,13 +204,29 @@ def gmeter(peaks):
 </div>'''
 
 
-def page(title, oil, gear, lat, lon, peaks, cold):
-    notice = ''
-    if cold:
-        notice = f'''<div role="status" style="display: flex; align-items: center; gap: 8px; height: 30px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {LINE}; border-radius: 15px; background: {FACE}; font-size: 13px; font-weight: 500; color: {INK2}; white-space: nowrap">
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{INK}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg>
-Engine and gearbox still cold — oil below 80 °C
+THERMOMETER = '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>'
+WARNING = '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path>'
+HOT_FILL = "#C8101A"   # warning fill: white text on it passes 4.5:1
+
+
+def notice_pill(kind):
+    """The pill in the bottom slot. 'cold' is quiet; 'hot' is a filled warning."""
+    if kind == 'cold':
+        edge, fill, type_ = LINE, FACE, f"font-size: 13px; font-weight: 500; color: {INK2}"
+        glyph, stroke, text = THERMOMETER, 2, "Engine and gearbox still cold — oil below 80 °C"
+    elif kind == 'hot':
+        edge, fill, type_ = HOT, HOT_FILL, f"font-size: 14px; font-weight: 700; letter-spacing: 0.02em; color: {INK}"
+        glyph, stroke, text = WARNING, 2.4, "Engine and gearbox oil hot — above 130 °C and 120 °C"
+    else:
+        return ''
+    return f'''<div role="status" style="display: flex; align-items: center; gap: 8px; height: 30px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {edge}; border-radius: 15px; background: {fill}; {type_}; white-space: nowrap">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{INK}" stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{glyph}</svg>
+{text}
 </div>'''
+
+
+def page(title, oil, gear, lat, lon, peaks, state=None):
+    notice = notice_pill(state)
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -272,6 +288,6 @@ class Component extends DCLogic {{
 '''
 
 
-open(f'{OUT}/Main.dc.html', 'w').write(page('RS Monitor — driving', 104, 88, 0.62, -0.28, (0.36, 0.88, 0.95, 0.82), False))
-open(f'{OUT}/Warmup.dc.html', 'w').write(page('RS Monitor — cold start', 46, 38, 0.02, 0.01, (0.08, 0.10, 0.12, 0.09), True))
-open(f'{OUT}/Hot.dc.html', 'w').write(page('RS Monitor — hot', 141, 126, -0.55, 0.20, (0.36, 0.88, 0.95, 0.82), False))
+open(f'{OUT}/Main.dc.html', 'w').write(page('RS Monitor — driving', 104, 88, 0.62, -0.28, (0.36, 0.88, 0.95, 0.82)))
+open(f'{OUT}/Warmup.dc.html', 'w').write(page('RS Monitor — cold start', 46, 38, 0.02, 0.01, (0.08, 0.10, 0.12, 0.09), 'cold'))
+open(f'{OUT}/Hot.dc.html', 'w').write(page('RS Monitor — hot', 141, 126, -0.55, 0.20, (0.36, 0.88, 0.95, 0.82), 'hot'))
