@@ -54,6 +54,14 @@ To build on a computer instead, open the repo in Android Studio.
    a request at the gearbox unit, which is what the oil-temperature gauges depend on.
 5. Turn on live engine speed and check the number against the tachometer.
 
+**Finding the oil-temperature IDs**
+
+The "Find IDs" tab asks the selected control unit for every data ID in a range and lists the
+ones that answer, with the raw bytes and what they would mean as a temperature under the two
+formulas VW-group units most often use. It only reads values. To pin an ID down, scan once
+cold and once warm and look for the value that tracks the oil temperature on the dash (for
+the gearbox, against a VCDS reading).
+
 **On the car screen**
 
 Installing the APK the normal way is not enough. Android Auto only shows an app built with the
@@ -201,11 +209,18 @@ Auto showing live RPM.
   engine and 7E1 for the gearbox.
 - **Adapter:** a generic ELM327 "mini" with a power button (sold as Kungfuren OBD2 4.0). It
   must be switched on to be seen.
+- **The adapter can reach both control units.** Tested in the car: the engine unit answers
+  `0105` from `7E8`, and with the gearbox selected a `22 F1 90` request is answered from `7E9`.
+- **Engine speed updates about 13 times a second** on this adapter, with only engine speed
+  being polled.
+- **The app shows on the car screen** once it is installed so that Android records Google Play
+  as the installer.
 
 ## Open questions
 
-1. **Does the adapter obey the command that aims a request at one control unit?** Some ELM327
-   clones ignore it. Step 4 of the first run answers this.
+1. **The real size of the car screen.** The design assumed 800×480 with Android Auto's menu
+   on the left. On this car the menu is along the bottom. The test screen now prints the real
+   size, and the gauge layout has to be fitted to it.
 2. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
    They have to be found on the car and checked against the dash display and VCDS.
 3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this

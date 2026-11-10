@@ -61,6 +61,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rsmonitor.app.obd.DeviceFinder
 import com.rsmonitor.app.obd.ObdHub
+import com.rsmonitor.app.obd.hexString
 
 // Palette from the design (see README).
 private val Screen = Color(0xFF18181A)
@@ -205,6 +206,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     val rpm by ObdHub.rpm.collectAsStateWithLifecycle()
     val rate by ObdHub.rate.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+    var findIds by remember { mutableStateOf(false) }
 
     // which control unit the console talks to
     Row(
@@ -234,6 +236,21 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
             )
         }
         Switch(checked = live, onCheckedChange = { ObdHub.setLive(it) })
+    }
+
+    // console, or the search for data IDs
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Segment("Console", !findIds, Modifier.weight(1f)) { findIds = false }
+        Segment("Find IDs", findIds, Modifier.weight(1f)) { findIds = true }
+    }
+
+    if (findIds) {
+        ScanPanel(unit)
+        OutlineButton("Disconnect") { ObdHub.disconnect() }
+        return
     }
 
     LogView(log, Modifier.weight(1f))
@@ -271,6 +288,96 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     }
 
     OutlineButton("Disconnect") { ObdHub.disconnect() }
+}
+
+/** Tries a range of data IDs on the selected control unit and lists the ones that answer. */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.ScanPanel(unit: String) {
+    val scan by ObdHub.scan.collectAsStateWithLifecycle()
+    var from by remember { mutableStateOf("2000") }
+    var to by remember { mutableStateOf("20FF") }
+    val unitName = if (unit == ObdHub.ENGINE) "engine" else "gearbox"
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        HexField(from, "First ID", Modifier.weight(1f)) { from = it }
+        Text("to", color = Secondary, fontSize = 14.sp)
+        HexField(to, "Last ID", Modifier.weight(1f)) { to = it }
+        FilledButton(if (scan.running) "Stop" else "Scan") {
+            if (scan.running) {
+                ObdHub.stopScan()
+            } else {
+                val first = from.toIntOrNull(16)
+                val last = to.toIntOrNull(16)
+                if (first != null && last != null) ObdHub.startScan(first, last)
+            }
+        }
+    }
+
+    val scannedUnit = if (scan.unit == ObdHub.ENGINE) "engine" else "gearbox"
+    Text(
+        text = when {
+            scan.running ->
+                "Scanning the $scannedUnit · at ${"%04X".format(scan.current)} of ${"%04X".format(scan.to)} · ${scan.hits.size} answered"
+            scan.tried > 0 ->
+                "Tried ${scan.tried} IDs on the $scannedUnit from ${"%04X".format(scan.from)}. ${scan.hits.size} answered."
+            else ->
+                "Asks the $unitName for every ID in the range and lists the ones that answer. " +
+                    "It only reads values. Expect roughly 10 IDs a second; keep the car parked."
+        },
+        color = Secondary,
+        fontSize = 13.sp,
+    )
+
+    LazyColumn(
+        modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LogPanel),
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(scan.hits, key = { it.id }) { hit ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("%04X".format(hit.id), color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+                    Text(hexString(hit.data).ifEmpty { "(no data)" }, color = Label, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                }
+                val a = hit.data.firstOrNull()
+                if (a != null && hit.data.size <= 2) {
+                    // the two temperature formulas VW-group units most often use
+                    Text(
+                        "if a temperature: ${a - 40} °C (A−40) or ${"%.0f".format(a * 0.75 - 48)} °C (0.75·A−48)",
+                        color = Secondary,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HexField(value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    BasicTextField(
+        value = value,
+        onValueChange = { typed -> onChange(typed.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(4)) },
+        singleLine = true,
+        textStyle = TextStyle(color = Ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace),
+        cursorBrush = SolidColor(Ink),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
+        modifier = modifier,
+        decorationBox = { field ->
+            Box(
+                Modifier
+                    .heightIn(min = 48.dp)
+                    .border(1.dp, Edge, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isEmpty()) {
+                    Text(hint, color = Secondary, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                }
+                field()
+            }
+        },
+    )
 }
 
 @Composable

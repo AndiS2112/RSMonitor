@@ -39,3 +39,35 @@ fun isFailedReply(line: String): Boolean {
     // header (3) + length byte (2), then the service byte: 7F means a negative response
     return s.length >= 7 && s.isHex() && s.substring(5, 7) == "7F"
 }
+
+/**
+ * The data bytes of a positive reply to "22 <id>" (read data by identifier), or null when the
+ * control unit refused, did not answer, or answered for a different ID.
+ * Handles a single CAN frame and a reply split over several frames.
+ */
+fun parseUdsData(lines: List<String>, id: Int): List<Int>? {
+    val frames = lines
+        .map { it.replace(" ", "") }
+        .filter { it.length >= 5 && (it.length - 3) % 2 == 0 && it.isHex() }
+        .map { line -> line.substring(3).chunked(2).map { it.toInt(16) } }
+    val first = frames.firstOrNull() ?: return null
+    val payload: List<Int> = when (first[0] shr 4) {
+        0 -> first.drop(1).take(first[0] and 0x0F)
+        1 -> {
+            if (first.size < 2) return null
+            val length = ((first[0] and 0x0F) shl 8) or first[1]
+            val all = first.drop(2).toMutableList()
+            for (frame in frames.drop(1)) {
+                if (frame[0] shr 4 == 2) all += frame.drop(1)
+            }
+            all.take(length)
+        }
+        else -> return null
+    }
+    if (payload.size < 3 || payload[0] != 0x62) return null
+    if (payload[1] != ((id shr 8) and 0xFF) || payload[2] != (id and 0xFF)) return null
+    return payload.drop(3)
+}
+
+/** Bytes as spaced hex, for example "7B 01". */
+fun hexString(bytes: List<Int>): String = bytes.joinToString(" ") { "%02X".format(it) }

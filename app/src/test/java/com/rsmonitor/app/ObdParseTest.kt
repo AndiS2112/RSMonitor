@@ -1,7 +1,9 @@
 package com.rsmonitor.app
 
+import com.rsmonitor.app.obd.hexString
 import com.rsmonitor.app.obd.isFailedReply
 import com.rsmonitor.app.obd.parseRpm
+import com.rsmonitor.app.obd.parseUdsData
 import com.rsmonitor.app.obd.prettyReply
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -63,5 +65,43 @@ class ObdParseTest {
         assertFalse(isFailedReply("ELM327 v1.5"))
         assertFalse(isFailedReply("7E804410C1AF8"))
         assertFalse(isFailedReply("7E8 04 62 20 2F 7B")) // UDS positive response
+    }
+
+    @Test
+    fun udsSingleFrame() {
+        assertEquals(listOf(0x7B), parseUdsData(listOf("7E8046220A17B"), 0x20A1))
+        assertEquals(listOf(0x01, 0xF4), parseUdsData(listOf("7E9 05 62 21 04 01 F4"), 0x2104))
+    }
+
+    @Test
+    fun udsMultiFrame() {
+        // 17 data bytes spelling TESTVIN0123456789, split over three frames
+        val reply = listOf(
+            "7E9 10 14 62 F1 90 54 45 53",
+            "7E9 21 54 56 49 4E 30 31 32",
+            "7E9 22 33 34 35 36 37 38 39",
+        )
+        val data = parseUdsData(reply, 0xF190)
+        assertEquals("TESTVIN0123456789", data!!.map { it.toChar() }.joinToString(""))
+    }
+
+    @Test
+    fun udsIgnoresPaddingAfterTheData() {
+        // length byte says 4, so the trailing AA AA AA is padding
+        assertEquals(listOf(0x7B), parseUdsData(listOf("7E8046220A17BAAAAAA"), 0x20A1))
+    }
+
+    @Test
+    fun udsRefusedOrMissing() {
+        assertNull(parseUdsData(listOf("7E8037F2231"), 0x20A1)) // negative response
+        assertNull(parseUdsData(listOf("NO DATA"), 0x20A1))
+        assertNull(parseUdsData(emptyList(), 0x20A1))
+        assertNull(parseUdsData(listOf("7E8046220A27B"), 0x20A1)) // answer for another ID
+    }
+
+    @Test
+    fun hexFormatting() {
+        assertEquals("7B 01 FF", hexString(listOf(0x7B, 0x01, 0xFF)))
+        assertEquals("", hexString(emptyList()))
     }
 }

@@ -65,6 +65,24 @@ object ObdHub {
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
 
+    /** One data ID that answered during a scan, with the bytes it returned. */
+    data class ScanHit(val id: Int, val data: List<Int>)
+
+    data class ScanState(
+        val running: Boolean = false,
+        val unit: String = ENGINE,
+        val from: Int = 0,
+        val to: Int = 0,
+        val current: Int = 0,
+        val tried: Int = 0,
+        val hits: List<ScanHit> = emptyList(),
+    )
+
+    private var scanner: Job? = null
+    private val _scan = MutableStateFlow(ScanState())
+    /** Progress and results of the data-ID scan. */
+    val scan: StateFlow<ScanState> = _scan
+
     fun connect(context: Context, device: BluetoothDevice, lowEnergy: Boolean) {
         if (_link.value != Link.Disconnected) return
         _link.value = Link.Connecting
@@ -94,6 +112,8 @@ object ObdHub {
     }
 
     fun disconnect() {
+        scanner?.cancel()
+        scanner = null
         poller?.cancel()
         poller = null
         transport?.close()
@@ -140,6 +160,54 @@ object ObdHub {
                 append(cmd, ex.message ?: "No reply", failed = true)
             }
         }
+    }
+
+    /**
+     * Asks the selected control unit for every data ID from [from] to [to] (read-only "22"
+     * requests) and records the ones that answer. Live polling is switched off while it runs.
+     */
+    fun startScan(from: Int, to: Int) {
+        val e = elm ?: return
+        if (_scan.value.running) return
+        val lo = minOf(from, to).coerceIn(0, 0xFFFF)
+        val hi = maxOf(from, to).coerceIn(0, 0xFFFF)
+        val unit = _unit.value
+        setLive(false)
+        _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo)
+        scanner = scope.launch {
+            try {
+                for (id in lo..hi) {
+                    if (!isActive) break
+                    val request = "22%04X".format(id)
+                    val reply = try {
+                        lock.withLock {
+                            ensureHeader(e, unit)
+                            e.command(request, 1_200)
+                        }
+                    } catch (ex: LinkLost) {
+                        append(request, ex.message ?: "Adapter disconnected", failed = true)
+                        disconnect()
+                        break
+                    } catch (ex: IOException) {
+                        emptyList()
+                    }
+                    val data = parseUdsData(reply, id)
+                    val before = _scan.value
+                    _scan.value = before.copy(
+                        current = id,
+                        tried = before.tried + 1,
+                        hits = if (data != null) before.hits + ScanHit(id, data) else before.hits,
+                    )
+                }
+            } finally {
+                _scan.value = _scan.value.copy(running = false)
+            }
+        }
+    }
+
+    fun stopScan() {
+        scanner?.cancel()
+        scanner = null
     }
 
     /** Turns continuous engine-speed polling on or off. */

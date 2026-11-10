@@ -88,6 +88,7 @@ class GaugeRenderer : SurfaceCallback {
 
     private var surface: Surface? = null
     private var visibleArea: Rect? = null
+    private var surfaceInfo = ""
     private var frame = Frame(ObdHub.Link.Disconnected, false, null, 0f)
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -99,6 +100,7 @@ class GaugeRenderer : SurfaceCallback {
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         surface = surfaceContainer.surface
+        surfaceInfo = "${surfaceContainer.width}×${surfaceContainer.height} px at ${surfaceContainer.dpi} dpi"
         draw()
     }
 
@@ -147,6 +149,15 @@ class GaugeRenderer : SurfaceCallback {
         val cx = area.exactCenterX()
 
         c.drawColor(SCREEN)
+
+        // the real size of the car's screen, needed to lay out the gauges (temporary)
+        text.typeface = plain
+        text.color = SECONDARY
+        text.textSize = h * 0.032f
+        c.drawText(
+            "screen $surfaceInfo · usable ${area.width()}×${area.height()} from (${area.left}, ${area.top})",
+            cx, top + h * 0.035f, text,
+        )
 
         // title
         text.typeface = bold
