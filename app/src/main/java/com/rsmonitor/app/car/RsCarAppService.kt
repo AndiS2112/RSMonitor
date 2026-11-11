@@ -1,5 +1,6 @@
 package com.rsmonitor.app.car
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.graphics.RectF
@@ -43,6 +44,10 @@ class RsCarAppService : CarAppService() {
  */
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val renderer = GaugeRenderer()
+    private val settings = carContext.getSharedPreferences("gauges", Context.MODE_PRIVATE)
+
+    /** Which page the centre dial shows; remembered between drives. */
+    private var centre = if (settings.getString(CENTRE_KEY, null) == Centre.Power.name) Centre.Power else Centre.GMeter
 
     init {
         lifecycle.addObserver(this)
@@ -95,24 +100,49 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             peakBrake = drive.peakBrake,
             peakLeft = drive.peakLeft,
             trace = drive.trace,
+            centre = centre,
+            power = ObdHub.power.value,
+            torque = ObdHub.torque.value,
+            powerPeak = drive.powerPeak,
+            torquePeak = drive.torquePeak,
+            torqueMissing = ObdHub.torqueSource.value == ObdHub.TorqueSource.Missing,
             flashOn = flashOn,
         )
     }
 
-    override fun onGetTemplate(): Template {
-        val live = ObdHub.live.value
-        val toggle = Action.Builder()
-            .setTitle(if (live) "Stop live" else "Start live")
-            .setOnClickListener { ObdHub.setLive(!ObdHub.live.value) }
-            .build()
-        return NavigationTemplate.Builder()
-            .setActionStrip(ActionStrip.Builder().addAction(toggle).build())
-            .build()
-    }
+    override fun onGetTemplate(): Template = gaugeTemplate(
+        live = ObdHub.live.value,
+        centre = centre,
+        onToggleLive = { ObdHub.setLive(!ObdHub.live.value) },
+        onSwitchCentre = {
+            centre = if (centre == Centre.Power) Centre.GMeter else Centre.Power
+            settings.edit().putString(CENTRE_KEY, centre.name).apply()
+            invalidate()
+        },
+    )
 
     private companion object {
         const val FRAME_MS = 50L
+        const val CENTRE_KEY = "centre"
     }
+}
+
+/**
+ * The buttons Android Auto draws over the gauges: live data on or off, and which page the
+ * centre dial shows. The second button is named after the page it switches to.
+ */
+fun gaugeTemplate(live: Boolean, centre: Centre, onToggleLive: () -> Unit, onSwitchCentre: () -> Unit): Template {
+    val liveButton = Action.Builder()
+        .setTitle(if (live) "Stop live" else "Start live")
+        .setOnClickListener { onToggleLive() }
+        .build()
+    val centreButton = Action.Builder()
+        .setTitle(if (centre == Centre.Power) "G-meter" else "Power")
+        .setOnClickListener { onSwitchCentre() }
+        .build()
+    return NavigationTemplate.Builder()
+        .setActionStrip(ActionStrip.Builder().addAction(centreButton).addAction(liveButton).build())
+        .build()
 }
 
 /** Paints a frame onto the car's surface whenever the data changes. */

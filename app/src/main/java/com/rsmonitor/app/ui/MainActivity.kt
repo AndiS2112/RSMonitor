@@ -258,6 +258,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     val live by ObdHub.live.collectAsStateWithLifecycle()
     val rpm by ObdHub.rpm.collectAsStateWithLifecycle()
     val rate by ObdHub.rate.collectAsStateWithLifecycle()
+    val torque by ObdHub.torque.collectAsStateWithLifecycle()
+    val power by ObdHub.power.collectAsStateWithLifecycle()
+    val torqueSource by ObdHub.torqueSource.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
     var findIds by remember { mutableStateOf(false) }
 
@@ -277,7 +280,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            SectionLabel("LIVE ENGINE SPEED")
+            SectionLabel("LIVE ENGINE DATA")
             Text(
                 text = when {
                     !live -> "Off"
@@ -287,6 +290,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
                 color = Ink,
                 fontSize = 15.sp,
             )
+            if (live && rpm != null) {
+                Text(
+                    text = when {
+                        torqueSource == ObdHub.TorqueSource.Missing -> "Torque: the engine does not answer the standard request"
+                        torque != null && power != null -> "Torque $torque Nm · power $power HP"
+                        torque != null -> "Torque $torque Nm"
+                        else -> "Torque: asking the engine…"
+                    },
+                    color = Secondary,
+                    fontSize = 13.sp,
+                )
+            }
         }
         Switch(checked = live, onCheckedChange = { ObdHub.setLive(it) })
     }

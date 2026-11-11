@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.os.SystemClock
 import com.rsmonitor.app.drive.Drive
+import com.rsmonitor.app.drive.metricHorsepower
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +72,20 @@ object ObdHub {
     private val _rate = MutableStateFlow(0f)
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
+
+    /** Whether the engine answers the standard torque requests (PIDs 62 and 63). */
+    enum class TorqueSource { Unknown, Available, Missing }
+
+    private val _torqueSource = MutableStateFlow(TorqueSource.Unknown)
+    val torqueSource: StateFlow<TorqueSource> = _torqueSource
+
+    private val _torque = MutableStateFlow<Int?>(null)
+    /** Engine torque in Nm, as the engine computer works it out. Never below zero. */
+    val torque: StateFlow<Int?> = _torque
+
+    private val _power = MutableStateFlow<Int?>(null)
+    /** Engine power in metric horsepower, from torque and engine speed. */
+    val power: StateFlow<Int?> = _power
 
     // The two oil temperatures stay empty until their data IDs on this car are known.
     private val _oilTemp = MutableStateFlow<Int?>(null)
@@ -162,6 +177,7 @@ object ObdHub {
         adapterHeader = ""
         _rpm.value = null
         _rate.value = 0f
+        clearTorque()
         _adapter.value = ""
         _link.value = Link.Disconnected
     }
@@ -289,39 +305,107 @@ object ObdHub {
         poller = null
         _rpm.value = null
         _rate.value = 0f
+        clearTorque()
         if (on && _link.value == Link.Ready) startPolling()
     }
 
+    private fun clearTorque() {
+        _torque.value = null
+        _power.value = null
+        _torqueSource.value = TorqueSource.Unknown
+    }
+
+    /**
+     * Reads engine speed as fast as the adapter allows, and torque with it when the engine
+     * offers it.
+     *
+     * Torque comes from two standard values: the reference torque in Nm (PID 63, asked once)
+     * and the current torque as a percentage of it (PID 62). Once the engine has answered
+     * for engine speed, the reference is asked for; if it comes back, every request from
+     * then on asks for engine speed and the percentage together ("010C62"), so the shift
+     * lights lose no speed. If the engine will not answer the two together, they are asked
+     * in turn instead.
+     */
     private fun startPolling() {
         poller?.cancel()
         poller = scope.launch {
             var count = 0
             var windowStart = SystemClock.elapsedRealtime()
             var lastReading = windowStart
+            var lastTorque = windowStart
+            var reference: Int? = null     // Nm
+            var together = true            // engine speed and torque in one request
+            var misses = 0                 // requests in a row that brought no torque
+            var turn = 0
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
+                val request = when {
+                    reference == null -> "010C"
+                    together -> "010C62"
+                    turn++ % 2 == 0 -> "010C"
+                    else -> "0162"
+                }
                 try {
                     val reply = lock.withLock {
                         ensureHeader(e, ENGINE)
-                        e.command("010C", 1_500)
+                        e.command(request, 1_500)
                     }
-                    val value = parseRpm(reply)
-                    if (value != null) {
-                        _rpm.value = value
+                    val pids = parsePids(reply)
+                    val now = SystemClock.elapsedRealtime()
+
+                    val speed = rpmOf(pids) ?: if (request == "0162") null else parseRpm(reply)
+                    if (speed != null) {
+                        _rpm.value = speed
                         count++
-                        lastReading = SystemClock.elapsedRealtime()
+                        lastReading = now
                         heard()
                     }
+
+                    val percent = torquePercent(pids)
+                    val ref = reference
+                    if (percent != null && ref != null) {
+                        misses = 0
+                        lastTorque = now
+                        heard()
+                        val nm = (ref * percent / 100).coerceAtLeast(0)
+                        _torque.value = nm
+                        val rpm = _rpm.value
+                        if (rpm != null) {
+                            val hp = metricHorsepower(nm, rpm)
+                            _power.value = hp
+                            Drive.onPower(hp, nm)
+                        }
+                    } else if (ref != null && request != "010C" && together && ++misses >= 3) {
+                        // the engine will not give both in one answer: ask in turn from now on
+                        together = false
+                        append(request, "No torque in the combined answer. Asking for it separately.", failed = true)
+                    }
+
+                    // the engine is answering: find out once whether it offers torque
+                    if (speed != null && _torqueSource.value == TorqueSource.Unknown) {
+                        val answer = lock.withLock {
+                            ensureHeader(e, ENGINE)
+                            e.command("0163", 1_500)
+                        }
+                        append("0163", answer)
+                        reference = referenceTorque(parsePids(answer))?.takeIf { it > 0 }
+                        _torqueSource.value = if (reference != null) TorqueSource.Available else TorqueSource.Missing
+                        lastTorque = SystemClock.elapsedRealtime()
+                    }
                 } catch (ex: LinkLost) {
-                    append("010C", ex.message ?: "Adapter disconnected", failed = true)
+                    append(request, ex.message ?: "Adapter disconnected", failed = true)
                     disconnect()
                     break
                 } catch (ex: IOException) {
                     delay(200)
                 }
                 val now = SystemClock.elapsedRealtime()
-                // ignition off with the adapter still powered: stop showing the last engine speed
+                // ignition off with the adapter still powered: stop showing the last readings
                 if (now - lastReading > STALE_MS) _rpm.value = null
+                if (now - lastTorque > STALE_MS) {
+                    _torque.value = null
+                    _power.value = null
+                }
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
                     count = 0

@@ -6,6 +6,7 @@ It shows three things on the car screen:
 - Engine oil temperature
 - Gearbox (S tronic) oil temperature
 - A G-meter with a peak trace
+- Engine power and torque (the centre dial switches between this and the G-meter)
 - A five-stage shift light
 
 Status: **design done, app partly built.** In the car, the app connects to the adapter,
@@ -43,6 +44,8 @@ published on the `previews` branch.
   until their data IDs are found.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
 - Peak engine-oil and gearbox-oil temperature (built, waiting for the oil readings).
+- Power and torque page for the centre dial (built; whether this engine offers the torque
+  reading it needs is not yet checked in the car).
 
 **Gauge screen layout in the app**
 
@@ -54,6 +57,28 @@ published on the `previews` branch.
   and a small amber "PEAK" number above the hub on the G-meter side. The peak is never shown
   below the current reading.
 - Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
+
+**Power and torque**
+
+A button on the car screen switches the centre dial between the G-meter and power and
+torque; the button is named after the page it leads to, and the choice is remembered.
+
+- Two rings in one dial, each with a 270° scale open at the bottom: power on the outer ring
+  (0–480 HP), torque on the inner ring (0–450 Nm). The car makes 450 PS at 8,250 rpm and
+  430 Nm from 4,000 to 6,000 rpm.
+- Each ring has its own needle, solid at its scale and fading out towards the middle.
+- The torque reading and its peak sit in the middle of the torque ring; the power reading
+  and its peak sit in the open bottom of the power ring. Peaks are also marked in amber on
+  each ring. They clear when the car is switched off.
+- HP is metric horsepower (PS): torque in Nm × rpm ÷ 7023.5.
+- Torque is the engine computer's own calculated figure, not a measurement. It is read from
+  two standard OBD values: the reference torque in Nm (PID 63, asked once) and the current
+  torque as a percentage of it (PID 62). Engine speed and the percentage are asked for in
+  one request (`010C62`) so the shift lights do not slow down; if the engine will not answer
+  both together, they are asked in turn.
+- If the engine does not offer these values, the dial shows dashes and a notice, and the
+  phone screen says so under "Live engine data". The fallback is Audi's own torque value,
+  which needs its data ID found like the oil temperatures.
 
 **G-meter**
 
@@ -277,6 +302,8 @@ Auto showing live RPM.
    Auto is running. Not yet checked in the car.
 6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
    a second.
+7. **Whether the engine answers the standard torque values** (PIDs 62 and 63), and if so
+   whether it answers engine speed and torque in one request.
 5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
    time, so the lights may need to come on earlier than the figures above. This has to be

@@ -4,9 +4,13 @@ import com.rsmonitor.app.obd.hexString
 import com.rsmonitor.app.obd.isCarReply
 import com.rsmonitor.app.obd.isFailedReply
 import com.rsmonitor.app.obd.isPositiveRead
+import com.rsmonitor.app.obd.parsePids
 import com.rsmonitor.app.obd.parseRpm
 import com.rsmonitor.app.obd.parseUdsData
 import com.rsmonitor.app.obd.prettyReply
+import com.rsmonitor.app.obd.referenceTorque
+import com.rsmonitor.app.obd.rpmOf
+import com.rsmonitor.app.obd.torquePercent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -114,6 +118,39 @@ class ObdParseTest {
         assertFalse(isPositiveRead(listOf("7E8 03 7F 22 31")))
         assertFalse(isPositiveRead(listOf("NO DATA")))
         assertFalse(isPositiveRead(emptyList()))
+    }
+
+    @Test
+    fun engineSpeedAndTorqueFromOneAnswer() {
+        // asked "010C62": 0x1AF8 / 4 = 1726 rpm, 0x9B - 125 = 30 %
+        val pids = parsePids(listOf("7E8 06 41 0C 1A F8 62 9B"))
+        assertEquals(1726, rpmOf(pids))
+        assertEquals(30, torquePercent(pids))
+        assertNull(referenceTorque(pids))
+    }
+
+    @Test
+    fun torqueAnswersOnTheirOwn() {
+        assertEquals(-5, torquePercent(parsePids(listOf("7E803416278"))))   // coasting
+        assertEquals(430, referenceTorque(parsePids(listOf("7E804416301AE"))))
+        assertEquals(430, referenceTorque(parsePids(listOf("41 63 01 AE"))))  // adapter headers off
+    }
+
+    @Test
+    fun paddingAfterTheAnswerIsNotRead() {
+        // the frame is filled up to eight bytes with 05, which is also a known value's number
+        val pids = parsePids(listOf("7E804410C1AF8050505"))
+        assertEquals(1726, rpmOf(pids))
+        assertEquals(setOf(0x0C), pids.keys)
+    }
+
+    @Test
+    fun noValuesInARefusalOrAnError() {
+        assertTrue(parsePids(listOf("NO DATA")).isEmpty())
+        assertTrue(parsePids(listOf("7E8 03 7F 01 12")).isEmpty())
+        assertTrue(parsePids(emptyList()).isEmpty())
+        // an answer cut short carries nothing usable
+        assertNull(rpmOf(parsePids(listOf("7E803410C1A"))))
     }
 
     @Test

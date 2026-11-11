@@ -1,5 +1,6 @@
 package com.rsmonitor.app.car
 
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -15,6 +16,9 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+
+/** What the large dial in the middle shows. */
+enum class Centre { GMeter, Power }
 
 /** Everything the gauge screen shows. A null reading means "no data yet". */
 data class GaugeFrame(
@@ -40,13 +44,21 @@ data class GaugeFrame(
     val peakLeft: Float = 0f,
     /** Peak g by direction, evenly spaced clockwise starting at "accelerating". */
     val trace: List<Float> = emptyList(),
+    val centre: Centre = Centre.GMeter,
+    /** Engine power in metric horsepower and torque in Nm, with their peaks. */
+    val power: Int? = null,
+    val torque: Int? = null,
+    val powerPeak: Int? = null,
+    val torquePeak: Int? = null,
+    /** True once the engine has been asked for torque and does not offer it. */
+    val torqueMissing: Boolean = false,
     /** False during the dark half of the upshift flash. */
     val flashOn: Boolean = true,
 )
 
 /**
- * Draws the gauge screen from the design: engine oil left, G-meter centre, gearbox oil right,
- * shift lights in the top row, a notice below. All geometry is in the design's own units (a 736×442
+ * Draws the gauge screen from the design: engine oil left, the centre dial (G-meter, or power
+ * and torque), gearbox oil right, shift lights in the top row, a notice below. All geometry is in the design's own units (a 736×442
  * box) and scaled to whatever area the car gives. Uses only android.graphics, so it can be
  * rendered to a bitmap in tests.
  */
@@ -72,7 +84,7 @@ class GaugePainter {
         shiftLights(c, f)
         sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_HOT, f.oilTemp, f.oilPeak, "ENGINE OIL", engineIcon = true)
         sideGauge(c, RIGHT_X, 1, 50, 130, intArrayOf(50, 100, 130), GEAR_HOT, f.gearTemp, f.gearPeak, "GEARBOX OIL", engineIcon = false)
-        gMeter(c, f)
+        if (f.centre == Centre.Power) powerMeter(c, f) else gMeter(c, f)
         notice(c, f)
 
         if (footnote != null) {
@@ -349,7 +361,8 @@ class GaugePainter {
 
     // ---- G-meter ------------------------------------------------------------------
 
-    private fun gMeter(c: Canvas, f: GaugeFrame) {
+    /** The centre dial's body, shared by both of its pages. */
+    private fun centreDial(c: Canvas) {
         val cx = CENTRE_X
         val cy = CENTRE_Y
 
@@ -367,6 +380,13 @@ class GaugePainter {
         line.strokeWidth = 7f
         line.strokeCap = Paint.Cap.BUTT
         c.drawCircle(cx, cy, G_R - 4f, line)
+    }
+
+    private fun gMeter(c: Canvas, f: GaugeFrame) {
+        val cx = CENTRE_X
+        val cy = CENTRE_Y
+
+        centreDial(c)
         stroke(LINE, 1f)
         c.drawCircle(cx, cy, G_R - 12f, line)
 
@@ -466,6 +486,159 @@ class GaugePainter {
         c.drawRoundRect(rect, 6f, 6f, fill)
     }
 
+    // ---- power and torque ---------------------------------------------------------------
+
+    /** Scale angle in degrees clockwise from straight up: a 270° sweep, open at the bottom. */
+    private fun sweep(v: Float, top: Int) = -135f + 270f * v.coerceIn(0f, top.toFloat()) / top
+
+    /**
+     * Two rings in one dial: power on the outer ring, torque on the inner one. Each has its
+     * own needle, solid at its scale and fading out towards the middle of the dial.
+     */
+    private fun powerMeter(c: Canvas, f: GaugeFrame) {
+        val cx = CENTRE_X
+        val cy = CENTRE_Y
+        centreDial(c)
+
+        // outer ring: power
+        ring(c, 138.75f, 31.5f)
+        stroke(LINE, 1f)
+        c.drawCircle(cx, cy, 123f, line)
+        marks(c, HP_TOP, 132f, 146f, 5.5f, 139f, 2.9f, 1.9f)
+        style(numerals, 19f, INK, Paint.Align.CENTER)
+        for (l in labels(HP_TOP)) {
+            val a = sweep(l.toFloat(), HP_TOP)
+            c.drawText(l.toString(), px(cx, 103f, a), py(cy, 103f, a) + 19f * 0.35f, text)
+        }
+
+        // inner ring: torque
+        ring(c, 75f, 14f)
+        stroke(LINE, 1f)
+        c.drawCircle(cx, cy, 82f, line)
+        c.drawCircle(cx, cy, 68f, line)
+        marks(c, NM_TOP, 71f, 79f, 3.2f, 75f, 1.7f, 1f)
+        style(numerals, 13f, LABEL, Paint.Align.CENTER)
+        for (l in labels(NM_TOP)) {
+            val a = sweep(l.toFloat(), NM_TOP)
+            c.drawText(l.toString(), px(cx, 54f, a), py(cy, 54f, a) + 13f * 0.35f, text)
+        }
+
+        // peaks: amber marks across each ring; never shown below the current reading
+        val power = f.power
+        val torque = f.torque
+        val powerPeak = if (f.powerPeak != null && power != null) max(f.powerPeak, power) else f.powerPeak
+        val torquePeak = if (f.torquePeak != null && torque != null) max(f.torquePeak, torque) else f.torquePeak
+        if (powerPeak != null) {
+            val a = sweep(powerPeak.toFloat(), HP_TOP)
+            stroke(PEAK, 2.5f, Paint.Cap.ROUND)
+            c.drawLine(px(cx, 126.25f, a), py(cy, 126.25f, a), px(cx, 151.75f, a), py(cy, 151.75f, a), line)
+        }
+        if (torquePeak != null) {
+            val a = sweep(torquePeak.toFloat(), NM_TOP)
+            stroke(PEAK, 2f, Paint.Cap.ROUND)
+            c.drawLine(px(cx, 70f, a), py(cy, 70f, a), px(cx, 80f, a), py(cy, 80f, a), line)
+        }
+
+        // needles: power first, so torque's lies over the faded end of it
+        if (power != null) fadingNeedle(c, sweep(power.toFloat(), HP_TOP), 142f, 50f, 96f, 15f, 3.3f)
+        if (torque != null) fadingNeedle(c, sweep(torque.toFloat(), NM_TOP), 80f, 34f, 56f, 10f, 2.6f)
+
+        // numbers: torque in the middle of its ring, power in the open bottom of its ring
+        ringReadout(c, cy - 16f, torque, torquePeak, "Nm", 19f)
+        ringReadout(c, cy + 85f, power, powerPeak, "HP", 20f)
+    }
+
+    /** A black gloss band round the centre dial, as behind the dots of the oil gauges. */
+    private fun ring(c: Canvas, radius: Float, width: Float) {
+        val edge = radius + width / 2f
+        line.shader = LinearGradient(0f, CENTRE_Y - edge, 0f, CENTRE_Y + edge, GLOSS, GLOSS_AT, Shader.TileMode.CLAMP)
+        line.strokeWidth = width
+        line.strokeCap = Paint.Cap.BUTT
+        c.drawCircle(CENTRE_X, CENTRE_Y, radius, line)
+    }
+
+    /** The numbered marks of a scale: every hundred, and the end of the scale. */
+    private fun labels(top: Int): List<Int> = (0 until top step 100) + top
+
+    /** A mark every 10 units: a bar where there is a numeral, dots between, larger at the fifties. */
+    private fun marks(c: Canvas, top: Int, barFrom: Float, barTo: Float, barWidth: Float, dotAt: Float, large: Float, small: Float) {
+        val numbered = labels(top)
+        fill.shader = null
+        fill.color = INK
+        for (v in 0..top step 10) {
+            val a = sweep(v.toFloat(), top)
+            if (v in numbered) {
+                stroke(INK, barWidth, Paint.Cap.ROUND)
+                c.drawLine(px(CENTRE_X, barFrom, a), py(CENTRE_Y, barFrom, a), px(CENTRE_X, barTo, a), py(CENTRE_Y, barTo, a), line)
+            } else {
+                c.drawCircle(px(CENTRE_X, dotAt, a), py(CENTRE_Y, dotAt, a), if (v % 50 == 0) large else small, fill)
+            }
+        }
+    }
+
+    /**
+     * A blade from [root] to [tip] (distances from the dial's centre), fully solid from
+     * [solidFrom] outwards and fading to nothing at its root.
+     */
+    private fun fadingNeedle(c: Canvas, angle: Float, tip: Float, root: Float, solidFrom: Float, width: Float, tipWidth: Float) {
+        c.save()
+        c.translate(CENTRE_X, CENTRE_Y)
+        c.rotate(angle)
+        fun fade(colour: Int) = LinearGradient(0f, -root, 0f, -solidFrom, colour and 0x00FFFFFF, colour, Shader.TileMode.CLAMP)
+
+        // red glow round the blade
+        path.rewind()
+        path.moveTo(-tipWidth / 2f, -tip); path.lineTo(tipWidth / 2f, -tip); path.lineTo(width / 2f, -root); path.lineTo(-width / 2f, -root); path.close()
+        fill.shader = fade(NEEDLE_GLOW)
+        fill.maskFilter = BlurMaskFilter(5f, BlurMaskFilter.Blur.NORMAL)
+        c.drawPath(path, fill)
+        fill.maskFilter = null
+
+        // two faces, dark and bright, with a light ridge between
+        fill.shader = fade(NEEDLE_DARK)
+        c.drawPath(path, fill)
+        path.rewind()
+        path.moveTo(-tipWidth / 2f, -tip); path.lineTo(0f, -tip); path.lineTo(0f, -root); path.lineTo(-width / 2f, -root); path.close()
+        fill.shader = fade(NEEDLE_LIGHT)
+        c.drawPath(path, fill)
+        fill.shader = null
+        line.shader = fade(NEEDLE_RIDGE)
+        line.strokeWidth = 0.8f
+        line.strokeCap = Paint.Cap.BUTT
+        c.drawLine(0f, -tip, 0f, -root, line)
+        line.shader = null
+        c.restore()
+    }
+
+    /** A reading with its unit, and its peak on a second line, centred on the dial. [top] is the top of the block. */
+    private fun ringReadout(c: Canvas, top: Float, value: Int?, peak: Int?, unit: String, size: Float) {
+        val number = value?.toString() ?: "–"
+        val colour = if (value == null) MUTED else INK
+        style(numerals, size, colour, Paint.Align.LEFT)
+        val numberW = text.measureText(number)
+        style(bold, 9.5f, MUTED, Paint.Align.LEFT)
+        val unitW = text.measureText(unit)
+        val left = CENTRE_X - (numberW + 3f + unitW) / 2f
+        val baseline = top + size * 0.82f
+        style(numerals, size, colour, Paint.Align.LEFT)
+        c.drawText(number, left, baseline, text)
+        style(bold, 9.5f, MUTED, Paint.Align.LEFT)
+        c.drawText(unit, left + numberW + 3f, baseline, text)
+
+        if (peak == null) return
+        val peakText = peak.toString()
+        style(bold, 7.5f, MUTED, Paint.Align.LEFT, 0.16f)
+        val captionW = text.measureText("PEAK")
+        style(numerals, 11.5f, PEAK, Paint.Align.LEFT)
+        val peakW = text.measureText(peakText)
+        val peakLeft = CENTRE_X - (captionW + 4f + peakW) / 2f
+        val peakBaseline = top + size + 3f + 11.5f * 0.85f
+        style(bold, 7.5f, MUTED, Paint.Align.LEFT, 0.16f)
+        c.drawText("PEAK", peakLeft, peakBaseline, text)
+        style(numerals, 11.5f, PEAK, Paint.Align.LEFT)
+        c.drawText(peakText, peakLeft + captionW + 4f, peakBaseline, text)
+    }
+
     // ---- notice ---------------------------------------------------------------------
 
     private fun notice(c: Canvas, f: GaugeFrame) {
@@ -483,6 +656,9 @@ class GaugePainter {
             gearHot -> { message = "Gearbox oil hot — above $GEAR_HOT °C"; warning = true }
             !f.connected -> { message = "Adapter not connected. Open RS Monitor on the phone."; warning = false }
             !f.live -> { message = "Connected. Live data is off."; warning = false }
+            f.centre == Centre.Power && f.torqueMissing -> {
+                message = "The engine gives no torque reading on the standard request."; warning = false
+            }
             oilCold && gearCold -> { message = "Engine and gearbox still cold — oil below $COLD_BELOW °C"; warning = false }
             oilCold -> { message = "Engine oil still cold — below $COLD_BELOW °C"; warning = false }
             gearCold -> { message = "Gearbox oil still cold — below $COLD_BELOW °C"; warning = false }
@@ -581,6 +757,10 @@ class GaugePainter {
         const val GEAR_HOT = 120
         const val COLD_BELOW = 80
 
+        // power and torque scales
+        const val HP_TOP = 480
+        const val NM_TOP = 450
+
         // palette (see README)
         private val SCREEN = 0xFF18181A.toInt()
         private val FACE = 0xFF222225.toInt()
@@ -599,6 +779,7 @@ class GaugePainter {
         private val NEEDLE_LIGHT = 0xFFFF3A2A.toInt()
         private val NEEDLE_DARK = 0xFFB00800.toInt()
         private val NEEDLE_RIDGE = 0xFFFFC8BC.toInt()
+        private val NEEDLE_GLOW = 0x99FF1E14.toInt()
 
         private fun colours(vararg argb: Long) = IntArray(argb.size) { argb[it].toInt() }
 

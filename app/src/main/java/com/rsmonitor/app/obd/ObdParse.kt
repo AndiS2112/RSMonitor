@@ -22,6 +22,51 @@ fun parseRpm(lines: List<String>): Int? {
     return null
 }
 
+/** How many data bytes each standard value the app asks for carries. */
+private val PID_BYTES = mapOf(0x05 to 1, 0x0C to 2, 0x61 to 1, 0x62 to 1, 0x63 to 2)
+
+/**
+ * The values in a reply to a standard "01 ..." request, by PID. One request may ask for
+ * several values ("010C62"); the reply then lists them one after another:
+ * "7E8 06 41 0C 1A F8 62 9B". Reading stops at the first value whose length is not known.
+ */
+fun parsePids(lines: List<String>): Map<Int, List<Int>> {
+    val found = mutableMapOf<Int, List<Int>>()
+    for (line in lines) {
+        val s = line.replace(" ", "")
+        if (!s.isHex()) continue
+        // with a header: three characters, a length byte, then 41. Without: 41 straight away.
+        val body = when {
+            s.length >= 7 && (s.length - 3) % 2 == 0 && s.startsWith("41", 5) -> {
+                // the length byte says how much of the frame is the answer; the rest is padding
+                val length = s.substring(3, 5).toInt(16)
+                if (length !in 2..7) continue
+                s.substring(7, minOf(s.length, 5 + length * 2))
+            }
+            s.length % 2 == 0 && s.startsWith("41") -> s.substring(2)
+            else -> continue
+        }
+        val bytes = body.chunked(2).map { it.toInt(16) }
+        var i = 0
+        while (i < bytes.size) {
+            val size = PID_BYTES[bytes[i]] ?: break
+            if (i + size >= bytes.size) break
+            found[bytes[i]] = bytes.subList(i + 1, i + 1 + size)
+            i += 1 + size
+        }
+    }
+    return found
+}
+
+/** Engine torque right now as a percentage of the reference torque (PID 62). Negative when coasting. */
+fun torquePercent(pids: Map<Int, List<Int>>): Int? = pids[0x62]?.let { it[0] - 125 }
+
+/** The engine's reference torque in Nm (PID 63), the figure the percentage refers to. */
+fun referenceTorque(pids: Map<Int, List<Int>>): Int? = pids[0x63]?.let { it[0] * 256 + it[1] }
+
+/** Engine speed in rpm (PID 0C). */
+fun rpmOf(pids: Map<Int, List<Int>>): Int? = pids[0x0C]?.let { (it[0] * 256 + it[1]) / 4 }
+
 /**
  * Makes a CAN reply readable: "7E804410C1AF8" becomes "7E8 04 41 0C 1A F8".
  * Anything that is not a three-character header followed by whole bytes is returned unchanged.

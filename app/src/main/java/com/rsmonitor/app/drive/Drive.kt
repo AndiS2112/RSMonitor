@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
  * What the car is doing right now and the peaks since the last reset. Shared by the phone
  * screen and the Android Auto screen (same process).
  *
- * G-force comes from the phone's accelerometer; the oil temperatures are fed in by the
- * OBD connection once their data IDs are known.
+ * G-force comes from the phone's accelerometer; power, torque and (once their data IDs are
+ * known) the oil temperatures are fed in by the OBD connection.
  */
 object Drive : SensorEventListener {
     data class State(
@@ -27,6 +27,8 @@ object Drive : SensorEventListener {
         val trace: List<Float> = emptyList(),
         val oilPeak: Int? = null,
         val gearPeak: Int? = null,
+        val powerPeak: Int? = null,
+        val torquePeak: Int? = null,
     )
 
     private val tracker = GTracker()
@@ -97,6 +99,13 @@ object Drive : SensorEventListener {
     }
 
     @Synchronized
+    fun onPower(horsepower: Int, newtonMetres: Int) {
+        val before = peaks.power to peaks.torque
+        peaks.onPower(horsepower, newtonMetres)
+        if (before != peaks.power to peaks.torque) publish()
+    }
+
+    @Synchronized
     override fun onSensorChanged(event: SensorEvent) {
         val before = tracker.stage
         tracker.onSample(event.values[0], event.values[1], event.values[2], event.timestamp)
@@ -122,6 +131,8 @@ object Drive : SensorEventListener {
             trace = peaks.trace(),
             oilPeak = peaks.oil,
             gearPeak = peaks.gear,
+            powerPeak = peaks.power,
+            torquePeak = peaks.torque,
         )
     }
 }

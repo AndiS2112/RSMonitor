@@ -47,6 +47,22 @@ class PeaksTest {
     }
 
     @Test
+    fun powerAndTorquePeakSeparately() {
+        val p = Peaks()
+        assertNull(p.power)
+        p.onPower(306, 430)   // peak torque, mid power
+        p.onPower(450, 383)   // peak power, torque already falling
+        p.onPower(38, 112)
+        assertEquals(450, p.power)
+        assertEquals(430, p.torque)
+        p.resetG()
+        assertEquals(450, p.power)
+        p.resetAll()
+        assertNull(p.power)
+        assertNull(p.torque)
+    }
+
+    @Test
     fun resetPeakGLeavesTheOilPeaks() {
         val p = Peaks()
         p.onG(0.4f, 0.4f)

@@ -3,6 +3,7 @@ package com.rsmonitor.app
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.RectF
+import com.rsmonitor.app.car.Centre
 import com.rsmonitor.app.car.GaugeFrame
 import com.rsmonitor.app.car.GaugePainter
 import com.rsmonitor.app.drive.GTracker
@@ -95,4 +96,35 @@ class GaugePreviewTest {
 
     @Test
     fun notConnected() = render("7-not-connected", GaugeFrame())
+
+    // ---- the centre dial switched to power and torque ----
+
+    private val powerPage = driven.copy(centre = Centre.Power, oilPeak = 118, gearPeak = 96)
+
+    /** Full throttle at 5,000 rpm: peak torque. */
+    @Test
+    fun powerAtPeakTorque() = render(
+        "8-power-peak-torque",
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 88, torque = 430, power = 306, torquePeak = 430, powerPeak = 306),
+    )
+
+    /** Full throttle at 8,250 rpm: peak power, shift lights flashing. */
+    @Test
+    fun powerAtPeakPower() = render(
+        "9-power-peak-power",
+        powerPage.copy(rpm = 8250, oilTemp = 106, gearTemp = 90, torque = 383, power = 450, torquePeak = 430, powerPeak = 450),
+    )
+
+    @Test
+    fun powerCruising() = render(
+        "10-power-cruising",
+        powerPage.copy(rpm = 2400, oilTemp = 108, gearTemp = 92, torque = 112, power = 38, torquePeak = 430, powerPeak = 450),
+    )
+
+    /** The engine does not offer torque: empty rings, dashes and a notice. */
+    @Test
+    fun powerWithoutTorque() = render(
+        "11-power-no-torque",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, centre = Centre.Power, torqueMissing = true),
+    )
 }
