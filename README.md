@@ -11,8 +11,9 @@ It shows three things on the car screen:
 
 Status: **design done, app partly built.** In the car, the app connects to the adapter,
 reaches the engine and gearbox, and shows on Android Auto with live engine speed. The G-meter
-runs from the phone's motion sensor once calibrated. The oil temperatures have no data yet:
-their data IDs on this car are still being looked for.
+runs from the phone's motion sensor once calibrated. The gearbox oil temperature is read
+from the car. The engine oil temperature and engine torque have no data yet: their data IDs
+on this car are still being looked for.
 
 ## The design
 
@@ -40,8 +41,8 @@ published on the `previews` branch.
   unit (7E0) and the gearbox unit (7E1).
 - Live engine speed, read from the engine unit as fast as the adapter allows.
 - Android Auto gauge screen, drawn from the design: the three gauges, the shift lights and
-  the notice. The shift lights and the G-meter have live data. The oil gauges show a dash
-  until their data IDs are found.
+  the notice. The shift lights, the G-meter and the gearbox oil gauge have live data. The
+  engine oil gauge shows a dash until its data ID is found.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
 - Peak engine-oil and gearbox-oil temperature (built, waiting for the oil readings).
 - Power and torque page for the centre dial (built; whether this engine offers the torque
@@ -284,6 +285,14 @@ Auto showing live RPM.
   `0105` from `7E8`, and with the gearbox selected a `22 F1 90` request is answered from `7E9`.
 - **Engine speed updates about 13 times a second** on this adapter, with only engine speed
   being polled.
+- **Gearbox oil temperature is data ID `2104` on the gearbox control unit:** send `22 21 04`
+  to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40. Checked
+  on a cold car: `62 21 04 3B` (59) with 18 °C outside, so 19 °C. The app asks for it every
+  three seconds while live.
+- **The engine does not offer the standard torque values.** `0163` is refused with
+  `7F 01 12`. Torque will have to come from one of Audi's own data IDs.
+- **Engine data IDs tried and refused:** `22 20 A1` and `22 F4 5C`. A scan of engine IDs
+  2000–20FF found only `2096 = FF`.
 - **The app shows on the car screen** once it is installed so that Android records Google Play
   as the installer.
 - **The car gives the app a 1180×630 px surface at 166 dpi, of which 1156×606 is usable.**

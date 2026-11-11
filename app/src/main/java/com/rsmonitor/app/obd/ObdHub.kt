@@ -40,6 +40,10 @@ object ObdHub {
     /** An engine-speed reading older than this is no longer shown. */
     private const val STALE_MS = 2_000L
 
+    /** Oil temperature moves slowly, and asking the gearbox costs engine-speed readings. */
+    private const val GEAR_PERIOD_MS = 3_000L
+    private const val GEAR_STALE_MS = 10_000L
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
     private var transport: Transport? = null
@@ -87,11 +91,12 @@ object ObdHub {
     /** Engine power in metric horsepower, from torque and engine speed. */
     val power: StateFlow<Int?> = _power
 
-    // The two oil temperatures stay empty until their data IDs on this car are known.
+    // The engine oil temperature stays empty until its data ID on this car is known.
     private val _oilTemp = MutableStateFlow<Int?>(null)
     val oilTemp: StateFlow<Int?> = _oilTemp
 
     private val _gearTemp = MutableStateFlow<Int?>(null)
+    /** Gearbox oil temperature in °C, asked from the gearbox control unit every few seconds while live. */
     val gearTemp: StateFlow<Int?> = _gearTemp
 
     /** When the car last answered anything, on the SystemClock.elapsedRealtime clock. */
@@ -177,7 +182,7 @@ object ObdHub {
         adapterHeader = ""
         _rpm.value = null
         _rate.value = 0f
-        clearTorque()
+        clearReadings()
         _adapter.value = ""
         _link.value = Link.Disconnected
     }
@@ -305,14 +310,15 @@ object ObdHub {
         poller = null
         _rpm.value = null
         _rate.value = 0f
-        clearTorque()
+        clearReadings()
         if (on && _link.value == Link.Ready) startPolling()
     }
 
-    private fun clearTorque() {
+    private fun clearReadings() {
         _torque.value = null
         _power.value = null
         _torqueSource.value = TorqueSource.Unknown
+        _gearTemp.value = null
     }
 
     /**
@@ -337,6 +343,8 @@ object ObdHub {
             var together = true            // engine speed and torque in one request
             var misses = 0                 // requests in a row that brought no torque
             var turn = 0
+            var gearAsked = 0L
+            var gearRead = 0L
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
                 val request = when {
@@ -347,7 +355,7 @@ object ObdHub {
                 }
                 try {
                     val reply = lock.withLock {
-                        ensureHeader(e, ENGINE)
+                        ensureHeader(e, ENGINE, log = false)
                         e.command(request, 1_500)
                     }
                     val pids = parsePids(reply)
@@ -384,13 +392,29 @@ object ObdHub {
                     // the engine is answering: find out once whether it offers torque
                     if (speed != null && _torqueSource.value == TorqueSource.Unknown) {
                         val answer = lock.withLock {
-                            ensureHeader(e, ENGINE)
+                            ensureHeader(e, ENGINE, log = false)
                             e.command("0163", 1_500)
                         }
                         append("0163", answer)
                         reference = referenceTorque(parsePids(answer))?.takeIf { it > 0 }
                         _torqueSource.value = if (reference != null) TorqueSource.Available else TorqueSource.Missing
                         lastTorque = SystemClock.elapsedRealtime()
+                    }
+
+                    // every few seconds, while the car is answering, ask the gearbox for its oil temperature
+                    if (now - gearAsked >= GEAR_PERIOD_MS && now - lastReading < STALE_MS) {
+                        gearAsked = now
+                        val answer = lock.withLock {
+                            ensureHeader(e, GEARBOX, log = false)
+                            e.command("22%04X".format(GEARBOX_OIL_ID), 1_500)
+                        }
+                        val celsius = gearboxOilCelsius(answer)
+                        if (celsius != null) {
+                            gearRead = SystemClock.elapsedRealtime()
+                            heard()
+                            _gearTemp.value = celsius
+                            Drive.onGearboxTemperature(celsius)
+                        }
                     }
                 } catch (ex: LinkLost) {
                     append(request, ex.message ?: "Adapter disconnected", failed = true)
@@ -406,6 +430,7 @@ object ObdHub {
                     _torque.value = null
                     _power.value = null
                 }
+                if (now - gearRead > GEAR_STALE_MS) _gearTemp.value = null
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
                     count = 0
@@ -416,10 +441,11 @@ object ObdHub {
     }
 
     /** Points the adapter at a control unit. Call only while holding [lock]. */
-    private suspend fun ensureHeader(e: Elm327, header: String) {
+    private suspend fun ensureHeader(e: Elm327, header: String, log: Boolean = true) {
         if (adapterHeader == header) return
         val reply = e.command("ATSH$header")
-        append("ATSH$header", reply)
+        // live polling hops between the engine and the gearbox all the time; keep that out of the console
+        if (log) append("ATSH$header", reply)
         adapterHeader = header
     }
 

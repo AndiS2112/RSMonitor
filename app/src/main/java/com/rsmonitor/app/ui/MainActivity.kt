@@ -261,6 +261,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     val torque by ObdHub.torque.collectAsStateWithLifecycle()
     val power by ObdHub.power.collectAsStateWithLifecycle()
     val torqueSource by ObdHub.torqueSource.collectAsStateWithLifecycle()
+    val gearTemp by ObdHub.gearTemp.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
     var findIds by remember { mutableStateOf(false) }
 
@@ -298,6 +299,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
                         torque != null -> "Torque $torque Nm"
                         else -> "Torque: asking the engine…"
                     },
+                    color = Secondary,
+                    fontSize = 13.sp,
+                )
+                Text(
+                    text = gearTemp?.let { "Gearbox oil $it °C" } ?: "Gearbox oil: no reading yet",
                     color = Secondary,
                     fontSize = 13.sp,
                 )

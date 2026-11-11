@@ -22,6 +22,15 @@ fun parseRpm(lines: List<String>): Int? {
     return null
 }
 
+/** The data ID of the gearbox oil temperature on this car's gearbox control unit. */
+const val GEARBOX_OIL_ID = 0x2104
+
+/**
+ * Gearbox oil temperature in °C from the reply to "22 21 04": one byte, 40 below zero at 0.
+ * Checked on the car: `62 21 04 3B` on a cold car at 18 °C outside, so 0x3B (59) is 19 °C.
+ */
+fun gearboxOilCelsius(lines: List<String>): Int? = parseUdsData(lines, GEARBOX_OIL_ID)?.firstOrNull()?.minus(40)
+
 /** How many data bytes each standard value the app asks for carries. */
 private val PID_BYTES = mapOf(0x05 to 1, 0x0C to 2, 0x61 to 1, 0x62 to 1, 0x63 to 2)
 
