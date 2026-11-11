@@ -25,9 +25,9 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class GaugePreviewTest {
-    // 800×480 panel minus Android Auto's bottom bar (estimated from a photo of the car screen)
-    private val width = 800
-    private val height = 415
+    // the usable area the car reports to the app (read off the car screen)
+    private val width = 1156
+    private val height = 606
 
     private fun render(name: String, frame: GaugeFrame) {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)

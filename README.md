@@ -216,13 +216,14 @@ Auto showing live RPM.
   being polled.
 - **The app shows on the car screen** once it is installed so that Android records Google Play
   as the installer.
+- **The car gives the app a 1180×630 px surface at 166 dpi, of which 1156×606 is usable.**
+  Android Auto's menu bar runs along the bottom, outside that area. The panel itself is the
+  800×480 MMI 3G+ screen; the Android Auto box scales the picture down to it. The gauge screen
+  scales the design to whatever area it is given, so it fits by height.
 
 ## Open questions
 
-1. **The real size of the car screen.** The design assumed 800×480 with Android Auto's menu
-   on the left. On this car the menu is along the bottom. The test screen now prints the real
-   size, and the gauge layout has to be fitted to it.
-2. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
+1. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
    They have to be found on the car and checked against the dash display and VCDS.
 3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
    only matters for which entry to pick in the adapter list.

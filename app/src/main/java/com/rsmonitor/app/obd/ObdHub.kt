@@ -76,7 +76,22 @@ object ObdHub {
         val current: Int = 0,
         val tried: Int = 0,
         val hits: List<ScanHit> = emptyList(),
-    )
+        /** True when the unit accepts several IDs per request, which makes the scan about three times faster. */
+        val batched: Boolean = false,
+        val extendedSession: Boolean = false,
+    ) {
+        /** The results as plain text, one ID per line, for sharing. */
+        fun report(): String = buildString {
+            val name = if (unit == ENGINE) "engine" else "gearbox"
+            append("RS Monitor scan · $name ($unit) · ${"%04X".format(from)}–${"%04X".format(current)} · ")
+            append("tried $tried · ${hits.size} answered")
+            if (extendedSession) append(" · extended session")
+            append('\n')
+            for (hit in hits) {
+                append("%04X".format(hit.id)).append(": ").append(hexString(hit.data)).append('\n')
+            }
+        }
+    }
 
     private var scanner: Job? = null
     private val _scan = MutableStateFlow(ScanState())
@@ -165,44 +180,75 @@ object ObdHub {
     /**
      * Asks the selected control unit for every data ID from [from] to [to] (read-only "22"
      * requests) and records the ones that answer. Live polling is switched off while it runs.
+     *
+     * With [extendedSession] the unit is first asked to open an extended diagnostic session
+     * ("10 03"), in which some units reveal more IDs. The scan's own requests keep it open.
+     *
+     * If the unit accepts several IDs in one request, IDs are asked three at a time and only
+     * groups that answer are then asked one by one.
      */
-    fun startScan(from: Int, to: Int) {
+    fun startScan(from: Int, to: Int, extendedSession: Boolean) {
         val e = elm ?: return
         if (_scan.value.running) return
         val lo = minOf(from, to).coerceIn(0, 0xFFFF)
         val hi = maxOf(from, to).coerceIn(0, 0xFFFF)
         val unit = _unit.value
         setLive(false)
-        _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo)
+        _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo, extendedSession = extendedSession)
         scanner = scope.launch {
             try {
-                for (id in lo..hi) {
-                    if (!isActive) break
-                    val request = "22%04X".format(id)
-                    val reply = try {
-                        lock.withLock {
-                            ensureHeader(e, unit)
-                            e.command(request, 1_200)
+                if (extendedSession) append("1003", ask(e, unit, "1003"))
+                val batched = canBatch(e, unit)
+                _scan.value = _scan.value.copy(batched = batched)
+
+                var id = lo
+                while (id <= hi && isActive) {
+                    val group = (id..minOf(id + (if (batched) 2 else 0), hi)).toList()
+                    val worthAsking = group.size == 1 ||
+                        isPositiveRead(ask(e, unit, "22" + group.joinToString("") { "%04X".format(it) }))
+                    var found = emptyList<ScanHit>()
+                    if (worthAsking) {
+                        for (one in group) {
+                            val data = parseUdsData(ask(e, unit, "22%04X".format(one)), one)
+                            if (data != null) found = found + ScanHit(one, data)
                         }
-                    } catch (ex: LinkLost) {
-                        append(request, ex.message ?: "Adapter disconnected", failed = true)
-                        disconnect()
-                        break
-                    } catch (ex: IOException) {
-                        emptyList()
                     }
-                    val data = parseUdsData(reply, id)
                     val before = _scan.value
-                    _scan.value = before.copy(
-                        current = id,
-                        tried = before.tried + 1,
-                        hits = if (data != null) before.hits + ScanHit(id, data) else before.hits,
-                    )
+                    _scan.value = before.copy(current = group.last(), tried = before.tried + group.size, hits = before.hits + found)
+                    id = group.last() + 1
                 }
+            } catch (ex: LinkLost) {
+                append("scan", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
             } finally {
                 _scan.value = _scan.value.copy(running = false)
             }
         }
+    }
+
+    /** One request to a unit during a scan. A timeout counts as "no answer"; a lost link is thrown. */
+    private suspend fun ask(e: Elm327, unit: String, request: String): List<String> =
+        try {
+            lock.withLock {
+                ensureHeader(e, unit)
+                e.command(request, 1_200)
+            }
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            emptyList()
+        }
+
+    /**
+     * Whether the unit answers a request that mixes an ID it refuses with one it supports.
+     * The VIN (F190) is the supported one; units that only answer when every ID is valid
+     * fail this and are scanned one ID at a time.
+     */
+    private suspend fun canBatch(e: Elm327, unit: String): Boolean {
+        if (parseUdsData(ask(e, unit, "22F190"), 0xF190) == null) return false
+        val refused = listOf(0x0001, 0x0002, 0xFFF0).firstOrNull { !isPositiveRead(ask(e, unit, "22%04X".format(it))) }
+            ?: return false
+        return isPositiveRead(ask(e, unit, "22%04X".format(refused) + "F190"))
     }
 
     fun stopScan() {

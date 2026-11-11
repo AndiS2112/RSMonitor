@@ -2,6 +2,7 @@ package com.rsmonitor.app
 
 import com.rsmonitor.app.obd.hexString
 import com.rsmonitor.app.obd.isFailedReply
+import com.rsmonitor.app.obd.isPositiveRead
 import com.rsmonitor.app.obd.parseRpm
 import com.rsmonitor.app.obd.parseUdsData
 import com.rsmonitor.app.obd.prettyReply
@@ -103,5 +104,14 @@ class ObdParseTest {
     fun hexFormatting() {
         assertEquals("7B 01 FF", hexString(listOf(0x7B, 0x01, 0xFF)))
         assertEquals("", hexString(emptyList()))
+    }
+
+    @Test
+    fun positiveReadWhateverTheIds() {
+        assertTrue(isPositiveRead(listOf("7E8 04 62 20 96 FF")))
+        assertTrue(isPositiveRead(listOf("7E9 10 14 62 F1 90 54 45 53", "7E9 21 54 56 49 4E 30 31 32")))
+        assertFalse(isPositiveRead(listOf("7E8 03 7F 22 31")))
+        assertFalse(isPositiveRead(listOf("NO DATA")))
+        assertFalse(isPositiveRead(emptyList()))
     }
 }

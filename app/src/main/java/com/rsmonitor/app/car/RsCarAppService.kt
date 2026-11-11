@@ -86,12 +86,10 @@ class GaugeRenderer : SurfaceCallback {
     private val painter = GaugePainter()
     private var surface: Surface? = null
     private var visibleArea: Rect? = null
-    private var surfaceInfo = ""
     private var frame = GaugeFrame()
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         surface = surfaceContainer.surface
-        surfaceInfo = "${surfaceContainer.width}×${surfaceContainer.height} px at ${surfaceContainer.dpi} dpi"
         draw()
     }
 
@@ -130,9 +128,7 @@ class GaugeRenderer : SurfaceCallback {
             val area = visibleArea?.takeIf { !it.isEmpty }?.let { RectF(it) }
                 ?: RectF(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat())
             val flashOn = (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
-            // temporary: the real screen size, to confirm the layout fits
-            val footnote = "screen $surfaceInfo · usable ${area.width().toInt()}×${area.height().toInt()}"
-            painter.paint(canvas, area, frame.copy(flashOn = flashOn), footnote)
+            painter.paint(canvas, area, frame.copy(flashOn = flashOn))
         } finally {
             s.unlockCanvasAndPost(canvas)
         }

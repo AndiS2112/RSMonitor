@@ -2,6 +2,7 @@ package com.rsmonitor.app.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -49,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -294,9 +296,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.ScanPanel(unit: String) {
     val scan by ObdHub.scan.collectAsStateWithLifecycle()
-    var from by remember { mutableStateOf("2000") }
-    var to by remember { mutableStateOf("20FF") }
+    var from by remember { mutableStateOf("1000") }
+    var to by remember { mutableStateOf("2FFF") }
+    var extended by remember { mutableStateOf(false) }
     val unitName = if (unit == ObdHub.ENGINE) "engine" else "gearbox"
+    val context = LocalContext.current
+
+    // a scan can take many minutes; keep the phone awake while it runs
+    val view = LocalView.current
+    DisposableEffect(scan.running) {
+        view.keepScreenOn = scan.running
+        onDispose { view.keepScreenOn = false }
+    }
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         HexField(from, "First ID", Modifier.weight(1f)) { from = it }
@@ -308,25 +319,51 @@ private fun androidx.compose.foundation.layout.ColumnScope.ScanPanel(unit: Strin
             } else {
                 val first = from.toIntOrNull(16)
                 val last = to.toIntOrNull(16)
-                if (first != null && last != null) ObdHub.startScan(first, last)
+                if (first != null && last != null) ObdHub.startScan(first, last, extended)
             }
         }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Extended session", color = Ink, fontSize = 15.sp)
+            Text("Sends 10 03 first. Some units show more IDs this way.", color = Secondary, fontSize = 12.sp)
+        }
+        Switch(checked = extended, onCheckedChange = { extended = it }, enabled = !scan.running)
     }
 
     val scannedUnit = if (scan.unit == ObdHub.ENGINE) "engine" else "gearbox"
     Text(
         text = when {
             scan.running ->
-                "Scanning the $scannedUnit · at ${"%04X".format(scan.current)} of ${"%04X".format(scan.to)} · ${scan.hits.size} answered"
+                "Scanning the $scannedUnit${if (scan.batched) ", three IDs at a time" else ""} · " +
+                    "at ${"%04X".format(scan.current)} of ${"%04X".format(scan.to)} · ${scan.hits.size} answered"
             scan.tried > 0 ->
                 "Tried ${scan.tried} IDs on the $scannedUnit from ${"%04X".format(scan.from)}. ${scan.hits.size} answered."
-            else ->
+            else -> {
+                val count = ((to.toIntOrNull(16) ?: 0) - (from.toIntOrNull(16) ?: 0)).coerceAtLeast(0) + 1
                 "Asks the $unitName for every ID in the range and lists the ones that answer. " +
-                    "It only reads values. Expect roughly 10 IDs a second; keep the car parked."
+                    "It only reads values. $count IDs take about ${(count / 1500).coerceAtLeast(1)} to " +
+                    "${(count / 500).coerceAtLeast(2)} min; keep the car parked."
+            }
         },
         color = Secondary,
         fontSize = 13.sp,
     )
+
+    if (!scan.running && scan.tried > 0) {
+        OutlineButton("Share results (${scan.hits.size})") {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, scan.report())
+            }
+            context.startActivity(Intent.createChooser(send, "Share scan results"))
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LogPanel),

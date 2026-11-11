@@ -69,5 +69,22 @@ fun parseUdsData(lines: List<String>, id: Int): List<Int>? {
     return payload.drop(3)
 }
 
+/**
+ * True when a reply to any "22 …" request is a positive one, whichever IDs it carries.
+ * Used when several IDs are asked for at once and only "did anything answer" matters.
+ */
+fun isPositiveRead(lines: List<String>): Boolean {
+    val first = lines
+        .map { it.replace(" ", "") }
+        .firstOrNull { it.length >= 7 && (it.length - 3) % 2 == 0 && it.isHex() }
+        ?.let { line -> line.substring(3).chunked(2).map { it.toInt(16) } }
+        ?: return false
+    return when (first[0] shr 4) {
+        0 -> first[1] == 0x62
+        1 -> first.size >= 3 && first[2] == 0x62
+        else -> false
+    }
+}
+
 /** Bytes as spaced hex, for example "7B 01". */
 fun hexString(bytes: List<Int>): String = bytes.joinToString(" ") { "%02X".format(it) }
