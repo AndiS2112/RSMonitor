@@ -20,9 +20,10 @@ import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.rsmonitor.app.drive.Drive
+import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.obd.ObdHub
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -50,23 +51,52 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     override fun onCreate(owner: LifecycleOwner) {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(renderer)
 
+        Drive.acquire(carContext)
+
         lifecycleScope.launch {
-            combine(ObdHub.link, ObdHub.live, ObdHub.rpm, ObdHub.rate) { link, live, rpm, rate ->
-                // Oil temperatures and g-force have no data source yet, so they stay empty.
-                GaugeFrame(connected = link == ObdHub.Link.Ready, live = live, rate = rate, rpm = rpm)
-            }.collect { renderer.show(it) }
-        }
-        lifecycleScope.launch {
-            // keeps the flash going while the engine is past the upshift point
+            // About 20 times a second: gather the latest readings and repaint if anything
+            // changed. This also keeps the upshift flash going.
             while (isActive) {
-                delay(ShiftLights.FLASH_PERIOD_MS / 2)
-                renderer.tick()
+                renderer.show(currentFrame())
+                delay(FRAME_MS)
             }
         }
         lifecycleScope.launch {
             // the button's label follows the live state
             ObdHub.live.collect { invalidate() }
         }
+    }
+
+    override fun onDestroy(owner: LifecycleOwner) {
+        Drive.release()
+    }
+
+    private fun currentFrame(): GaugeFrame {
+        val drive = Drive.state.value
+        val rpm = ObdHub.rpm.value
+        val ready = drive.stage == GTracker.Stage.Ready
+        // both halves of the flash last half a period; outside the flash the value never changes
+        val flashOn = rpm == null || !ShiftLights.isFlashing(rpm) ||
+            (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
+        return GaugeFrame(
+            connected = ObdHub.link.value == ObdHub.Link.Ready,
+            live = ObdHub.live.value,
+            rate = ObdHub.rate.value,
+            rpm = rpm,
+            oilTemp = ObdHub.oilTemp.value,
+            gearTemp = ObdHub.gearTemp.value,
+            oilPeak = drive.oilPeak,
+            gearPeak = drive.gearPeak,
+            gStage = drive.stage,
+            gLat = if (ready) drive.lat else null,
+            gLon = if (ready) drive.lon else null,
+            peakAccel = drive.peakAccel,
+            peakRight = drive.peakRight,
+            peakBrake = drive.peakBrake,
+            peakLeft = drive.peakLeft,
+            trace = drive.trace,
+            flashOn = flashOn,
+        )
     }
 
     override fun onGetTemplate(): Template {
@@ -79,6 +109,10 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             .setActionStrip(ActionStrip.Builder().addAction(toggle).build())
             .build()
     }
+
+    private companion object {
+        const val FRAME_MS = 50L
+    }
 }
 
 /** Paints a frame onto the car's surface whenever the data changes. */
@@ -87,9 +121,11 @@ class GaugeRenderer : SurfaceCallback {
     private var surface: Surface? = null
     private var visibleArea: Rect? = null
     private var frame = GaugeFrame()
+    private var painted: GaugeFrame? = null
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         surface = surfaceContainer.surface
+        painted = null
         draw()
     }
 
@@ -104,15 +140,10 @@ class GaugeRenderer : SurfaceCallback {
         surface = null
     }
 
+    /** Paints [next] unless it is exactly what the screen already shows. */
     fun show(next: GaugeFrame) {
         frame = next
-        draw()
-    }
-
-    /** Redraws only while the lights are flashing. */
-    fun tick() {
-        val rpm = frame.rpm ?: return
-        if (ShiftLights.isFlashing(rpm)) draw()
+        if (next != painted) draw()
     }
 
     private fun draw() {
@@ -127,8 +158,8 @@ class GaugeRenderer : SurfaceCallback {
         try {
             val area = visibleArea?.takeIf { !it.isEmpty }?.let { RectF(it) }
                 ?: RectF(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat())
-            val flashOn = (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
-            painter.paint(canvas, area, frame.copy(flashOn = flashOn))
+            painter.paint(canvas, area, frame)
+            painted = frame
         } finally {
             s.unlockCanvasAndPost(canvas)
         }

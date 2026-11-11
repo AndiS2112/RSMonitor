@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rsmonitor.app.drive.Drive
+import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.obd.DeviceFinder
 import com.rsmonitor.app.obd.ObdHub
 import com.rsmonitor.app.obd.hexString
@@ -82,6 +84,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent { ConsoleScreen() }
+    }
+
+    // the G-meter listens to the phone's motion sensor while this screen is open
+    // (the Android Auto screen keeps its own hold on it)
+    override fun onStart() {
+        super.onStart()
+        Drive.acquire(this)
+    }
+
+    override fun onStop() {
+        Drive.release()
+        super.onStop()
     }
 }
 
@@ -131,6 +145,8 @@ private fun ConsoleScreen() {
             }
         }
 
+        GMeterPanel()
+
         when {
             !granted -> {
                 Text(
@@ -149,6 +165,41 @@ private fun ConsoleScreen() {
             link == ObdHub.Link.Connecting -> LogView(log, Modifier.weight(1f))
 
             else -> ConsoleControls(log)
+        }
+    }
+}
+
+/**
+ * G-meter setup. The phone can lie any way round, so it has to be told where it is each time
+ * it is put down: Calibrate finds "down" while parked, then "forward" from the first pull-away.
+ */
+@Composable
+private fun GMeterPanel() {
+    val drive by Drive.state.collectAsStateWithLifecycle()
+    val ready = drive.stage == GTracker.Stage.Ready
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel("G-METER")
+        Text(
+            text = when (drive.stage) {
+                GTracker.Stage.Uncalibrated -> "Not calibrated. Wedge the phone in its place, park, then tap Calibrate."
+                GTracker.Stage.Levelling -> "Keep the car still…"
+                GTracker.Stage.AwaitingPullAway -> "Now pull away forwards in a straight line."
+                GTracker.Stage.Ready ->
+                    "Ready · ${"%+.2f".format(drive.lon)} g forward · ${"%+.2f".format(drive.lat)} g right"
+            },
+            color = Ink,
+            fontSize = 15.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledButton("Calibrate") { Drive.calibrate() }
+            OutlineButton("Reset peak G", Modifier.weight(1f)) { Drive.resetPeakG() }
+        }
+        if (ready) {
+            Text("If braking shows as accelerating, the pull-away was read backwards:", color = Secondary, fontSize = 12.sp)
+            OutlineButton("Swap front and back") { Drive.flip() }
         }
     }
 }
@@ -484,10 +535,9 @@ private fun FilledButton(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun OutlineButton(text: String, onClick: () -> Unit) {
+private fun OutlineButton(text: String, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     Box(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .border(1.dp, Edge, RoundedCornerShape(12.dp))

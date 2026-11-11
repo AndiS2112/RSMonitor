@@ -1,6 +1,7 @@
 package com.rsmonitor.app
 
 import com.rsmonitor.app.obd.hexString
+import com.rsmonitor.app.obd.isCarReply
 import com.rsmonitor.app.obd.isFailedReply
 import com.rsmonitor.app.obd.isPositiveRead
 import com.rsmonitor.app.obd.parseRpm
@@ -113,5 +114,15 @@ class ObdParseTest {
         assertFalse(isPositiveRead(listOf("7E8 03 7F 22 31")))
         assertFalse(isPositiveRead(listOf("NO DATA")))
         assertFalse(isPositiveRead(emptyList()))
+    }
+
+    @Test
+    fun anyFrameFromAControlUnitMeansTheCarIsThere() {
+        assertTrue(isCarReply(listOf("7E804410C1AF8")))
+        assertTrue(isCarReply(listOf("7E8 03 7F 22 31")))   // a refusal is still an answer
+        assertFalse(isCarReply(listOf("NO DATA")))
+        assertFalse(isCarReply(listOf("UNABLE TO CONNECT")))
+        assertFalse(isCarReply(listOf("OK")))
+        assertFalse(isCarReply(emptyList()))
     }
 }

@@ -41,6 +41,15 @@ fun isFailedReply(line: String): Boolean {
 }
 
 /**
+ * True when at least one line is a frame from a control unit (a header followed by whole
+ * bytes). A refusal (7F) counts: the car is there and answering.
+ */
+fun isCarReply(lines: List<String>): Boolean = lines.any {
+    val s = it.replace(" ", "")
+    s.length >= 5 && (s.length - 3) % 2 == 0 && s.isHex()
+}
+
+/**
  * The data bytes of a positive reply to "22 <id>" (read data by identifier), or null when the
  * control unit refused, did not answer, or answered for a different ID.
  * Handles a single CAN frame and a reply split over several frames.

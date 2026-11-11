@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.RectF
 import com.rsmonitor.app.car.GaugeFrame
 import com.rsmonitor.app.car.GaugePainter
+import com.rsmonitor.app.drive.GTracker
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.cos
@@ -47,7 +48,7 @@ class GaugePreviewTest {
     }
 
     private val driven = GaugeFrame(
-        connected = true, live = true, rate = 13f,
+        connected = true, live = true, rate = 13f, gStage = GTracker.Stage.Ready,
         peakAccel = 0.36f, peakRight = 0.88f, peakBrake = 0.95f, peakLeft = 0.82f,
         trace = trace(0.36f, 0.88f, 0.95f, 0.82f),
     )
@@ -57,20 +58,41 @@ class GaugePreviewTest {
         "1-cold-start",
         GaugeFrame(
             connected = true, live = true, rate = 13f, rpm = 1500, oilTemp = 46, gearTemp = 38,
+            oilPeak = 46, gearPeak = 38, gStage = GTracker.Stage.Ready,
             gLat = 0.02f, gLon = 0.01f, peakAccel = 0.08f, peakRight = 0.10f, peakBrake = 0.12f, peakLeft = 0.09f,
             trace = trace(0.08f, 0.10f, 0.12f, 0.09f),
         ),
     )
 
     @Test
-    fun driving() = render("2-driving", driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 88, gLat = 0.62f, gLon = -0.28f))
+    fun driving() = render(
+        "2-driving",
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 88, oilPeak = 104, gearPeak = 88, gLat = 0.62f, gLon = -0.28f),
+    )
 
     @Test
-    fun hot() = render("3-hot", driven.copy(rpm = 8300, oilTemp = 141, gearTemp = 126, gLat = -0.55f, gLon = 0.20f))
+    fun hot() = render(
+        "3-hot",
+        driven.copy(rpm = 8300, oilTemp = 141, gearTemp = 126, oilPeak = 141, gearPeak = 126, gLat = -0.55f, gLon = 0.20f),
+    )
+
+    /** After a hard run: the needles have dropped back, the amber hands stay at the peaks. */
+    @Test
+    fun coolingDown() = render(
+        "4-cooling-down",
+        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 96, oilPeak = 138, gearPeak = 121, gLat = 0.05f, gLon = 0.03f),
+    )
+
+    /** What the car shows today: engine speed only, G-meter waiting to be calibrated. */
+    @Test
+    fun todayInTheCar() = render("5-today-rpm-only", GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820))
 
     @Test
-    fun todayInTheCar() = render("4-today-rpm-only", GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820))
+    fun calibrating() = render(
+        "6-calibrating",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, gStage = GTracker.Stage.AwaitingPullAway),
+    )
 
     @Test
-    fun notConnected() = render("5-not-connected", GaugeFrame())
+    fun notConnected() = render("7-not-connected", GaugeFrame())
 }

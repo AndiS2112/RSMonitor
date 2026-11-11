@@ -3,6 +3,7 @@ package com.rsmonitor.app.obd
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.os.SystemClock
+import com.rsmonitor.app.drive.Drive
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,12 @@ object ObdHub {
     const val GEARBOX = "7E1"
 
     private const val LOG_LIMIT = 200
+
+    /** No answer from the car for this long counts as "the car has been switched off". */
+    private const val CAR_OFF_MS = 30_000L
+
+    /** An engine-speed reading older than this is no longer shown. */
+    private const val STALE_MS = 2_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
@@ -64,6 +71,24 @@ object ObdHub {
     private val _rate = MutableStateFlow(0f)
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
+
+    // The two oil temperatures stay empty until their data IDs on this car are known.
+    private val _oilTemp = MutableStateFlow<Int?>(null)
+    val oilTemp: StateFlow<Int?> = _oilTemp
+
+    private val _gearTemp = MutableStateFlow<Int?>(null)
+    val gearTemp: StateFlow<Int?> = _gearTemp
+
+    /** When the car last answered anything, on the SystemClock.elapsedRealtime clock. */
+    @Volatile private var lastHeard = 0L
+
+    /** True once the peaks have been cleared for the current silence (or nothing was ever heard). */
+    @Volatile private var silenceHandled = true
+
+    private fun heard() {
+        lastHeard = SystemClock.elapsedRealtime()
+        silenceHandled = false
+    }
 
     /** One data ID that answered during a scan, with the bytes it returned. */
     data class ScanHit(val id: Int, val data: List<Int>)
@@ -167,6 +192,7 @@ object ObdHub {
                     }
                     e.command(cmd)
                 }
+                if (isCarReply(reply)) heard()
                 append(cmd, reply)
             } catch (ex: LinkLost) {
                 append(cmd, ex.message ?: "Adapter disconnected", failed = true)
@@ -232,7 +258,7 @@ object ObdHub {
             lock.withLock {
                 ensureHeader(e, unit)
                 e.command(request, 1_200)
-            }
+            }.also { if (isCarReply(it)) heard() }
         } catch (ex: LinkLost) {
             throw ex
         } catch (ex: IOException) {
@@ -271,6 +297,7 @@ object ObdHub {
         poller = scope.launch {
             var count = 0
             var windowStart = SystemClock.elapsedRealtime()
+            var lastReading = windowStart
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
                 try {
@@ -282,6 +309,8 @@ object ObdHub {
                     if (value != null) {
                         _rpm.value = value
                         count++
+                        lastReading = SystemClock.elapsedRealtime()
+                        heard()
                     }
                 } catch (ex: LinkLost) {
                     append("010C", ex.message ?: "Adapter disconnected", failed = true)
@@ -291,6 +320,8 @@ object ObdHub {
                     delay(200)
                 }
                 val now = SystemClock.elapsedRealtime()
+                // ignition off with the adapter still powered: stop showing the last engine speed
+                if (now - lastReading > STALE_MS) _rpm.value = null
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
                     count = 0
@@ -315,5 +346,29 @@ object ObdHub {
     private fun append(command: String, reply: String, failed: Boolean) {
         val line = LogLine(command, reply.ifEmpty { "(no reply)" }, failed)
         _log.value = (_log.value + line).takeLast(LOG_LIMIT)
+    }
+
+    init {
+        // Car-off watch. Once the car has answered at least once, 30 s without any answer
+        // clears every peak. That covers both the Bluetooth link dropping and the ignition
+        // going off while the adapter stays powered. The clock only runs while the app is
+        // actually asking (live data or a scan) or the link is down; a connected but idle
+        // console is not silence.
+        scope.launch {
+            var quietFrom = SystemClock.elapsedRealtime()
+            while (isActive) {
+                delay(1_000)
+                val now = SystemClock.elapsedRealtime()
+                val asking = _link.value != Link.Ready || _live.value || _scan.value.running
+                if (!asking) {
+                    quietFrom = now
+                    continue
+                }
+                if (!silenceHandled && now - maxOf(lastHeard, quietFrom) >= CAR_OFF_MS) {
+                    silenceHandled = true
+                    Drive.resetAllPeaks()
+                }
+            }
+        }
     }
 }

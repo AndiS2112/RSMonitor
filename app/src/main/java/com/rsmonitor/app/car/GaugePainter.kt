@@ -8,9 +8,11 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import com.rsmonitor.app.drive.GTracker
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -23,6 +25,11 @@ data class GaugeFrame(
     val rpm: Int? = null,
     val oilTemp: Int? = null,
     val gearTemp: Int? = null,
+    /** Highest oil temperatures since the car was last switched off. */
+    val oilPeak: Int? = null,
+    val gearPeak: Int? = null,
+    /** Where the G-meter's calibration stands; readings exist only once it is ready. */
+    val gStage: GTracker.Stage = GTracker.Stage.Uncalibrated,
     /** Sideways force in g, positive to the right. */
     val gLat: Float? = null,
     /** Fore-aft force in g, positive when accelerating. */
@@ -39,7 +46,7 @@ data class GaugeFrame(
 
 /**
  * Draws the gauge screen from the design: engine oil left, G-meter centre, gearbox oil right,
- * shift lights above, a notice below. All geometry is in the design's own units (a 736×442
+ * shift lights in the top row, a notice below. All geometry is in the design's own units (a 736×442
  * box) and scaled to whatever area the car gives. Uses only android.graphics, so it can be
  * rendered to a bitmap in tests.
  */
@@ -63,8 +70,8 @@ class GaugePainter {
 
         header(c, f)
         shiftLights(c, f)
-        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_HOT, f.oilTemp, "ENGINE OIL", engineIcon = true)
-        sideGauge(c, RIGHT_X, 1, 50, 130, intArrayOf(50, 100, 130), GEAR_HOT, f.gearTemp, "GEARBOX OIL", engineIcon = false)
+        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_HOT, f.oilTemp, f.oilPeak, "ENGINE OIL", engineIcon = true)
+        sideGauge(c, RIGHT_X, 1, 50, 130, intArrayOf(50, 100, 130), GEAR_HOT, f.gearTemp, f.gearPeak, "GEARBOX OIL", engineIcon = false)
         gMeter(c, f)
         notice(c, f)
 
@@ -81,9 +88,6 @@ class GaugePainter {
         val running = f.connected && f.live
         style(bold, 14f, if (running) INK else MUTED, Paint.Align.LEFT, 0.16f)
         c.drawText(if (running) "LIVE" else "PAUSED", 14f, 29f, text)
-
-        style(bold, 17f, INK, Paint.Align.CENTER, 0.32f)
-        c.drawText("RS MONITOR", CENTRE_X + 2.7f, 30f, text)
 
         style(plain, 13f, MUTED, Paint.Align.RIGHT, 0.06f)
         val status = if (running) "OBD · ${"%.0f".format(f.rate)} Hz" else if (f.connected) "OBD idle" else "OBD off"
@@ -129,9 +133,13 @@ class GaugePainter {
 
     private fun sideGauge(
         c: Canvas, cx: Float, side: Int, lo: Int, hi: Int, labels: IntArray, hotFrom: Int,
-        value: Int?, label: String, engineIcon: Boolean,
+        value: Int?, peak: Int?, label: String, engineIcon: Boolean,
     ) {
         val cy = CENTRE_Y
+
+        // the dial is the original drawing, enlarged as a whole about its centre
+        c.save()
+        c.scale(SIDE_SCALE, SIDE_SCALE, cx, cy)
 
         // face and chrome ring
         fill.shader = null
@@ -180,6 +188,15 @@ class GaugePainter {
         c.drawCircle(cx, cy, 21.5f, fill)
         fill.shader = null
 
+        // highest temperature reached: a thin amber hand across the dot band, under the needle.
+        // It is never shown below the current reading.
+        val peakShown = if (peak != null && value != null) max(peak, value) else peak
+        if (peakShown != null) {
+            val a = angle(peakShown.coerceIn(lo, hi).toFloat(), lo, hi, side)
+            stroke(PEAK, 2.5f, Paint.Cap.ROUND)
+            c.drawLine(px(cx, 85.25f, a), py(cy, 85.25f, a), px(cx, 106.75f, a), py(cy, 106.75f, a), line)
+        }
+
         // needle and its ribbed cap, turned together
         val shown = (value ?: lo).coerceIn(lo, hi)
         c.save()
@@ -190,18 +207,29 @@ class GaugePainter {
         fill.color = 0xFF000000.toInt()
         c.drawCircle(cx, cy, 2f, fill)
 
-        // icon between the hub and the G-meter
+        // icon below the hub, on the G-meter side of the 50 mark
         c.save()
-        c.translate(cx - side * 47f - 16f, cy - 16f)
+        c.translate(cx - side * 12f - 16f, cy + 56f - 16f)
         c.scale(32f / 36f, 32f / 36f)
         if (engineIcon) oilIcon(c) else gearboxIcon(c)
+        c.restore()
+
+        // the peak as a number, above the hub on the G-meter side
+        if (peakShown != null) {
+            val x = cx - side * 22f
+            style(bold, 9f, MUTED, Paint.Align.CENTER, 0.16f)
+            c.drawText("PEAK", x, cy - 58f, text)
+            style(numerals, 16f, PEAK, Paint.Align.CENTER)
+            c.drawText(peakShown.toString(), x, cy - 41f, text)
+        }
+
         c.restore()
 
         // name and precise reading under the gauge; the reading keeps a fixed width
         style(bold, 13f, LABEL, Paint.Align.LEFT, 0.16f)
         val labelW = text.measureText(label)
         val rowLeft = cx - (labelW + 10f + READOUT_W) / 2f
-        val baseline = cy + SIDE_R + 10f + 17f
+        val baseline = cy + SIDE_R * SIDE_SCALE + 10f + 17f
         val hot = value != null && value >= hotFrom
         if (side < 0) {
             c.drawText(label, rowLeft, baseline, text)
@@ -400,6 +428,14 @@ class GaugePainter {
             c.drawCircle(cx + x, cy + y, 11f, fill)
         }
 
+        // until the phone is calibrated there is no reading: say what is needed instead
+        when (f.gStage) {
+            GTracker.Stage.Uncalibrated -> plotHint(c, "NOT CALIBRATED", "Tap Calibrate on the phone")
+            GTracker.Stage.Levelling -> plotHint(c, "CALIBRATING", "Keep the car still")
+            GTracker.Stage.AwaitingPullAway -> plotHint(c, "CALIBRATING", "Pull away in a straight line")
+            GTracker.Stage.Ready -> Unit
+        }
+
         // four peak numbers, midway between the silver band and the bezel
         val mid = (plot + 7f + G_R - 12f) / 2f
         val known = lat != null && lon != null
@@ -412,6 +448,23 @@ class GaugePainter {
     }
 
     private fun g2(v: Float, known: Boolean) = if (known) "%.2f".format(v) else "–"
+
+    /** Two centred lines in the plot, each on a patch of plot colour so the crosshair does not cut through them. */
+    private fun plotHint(c: Canvas, title: String, detail: String) {
+        style(bold, 12f, INK, Paint.Align.CENTER, 0.16f)
+        patch(c, text.measureText(title), CENTRE_Y - 27f, CENTRE_Y - 7f)
+        c.drawText(title, CENTRE_X, CENTRE_Y - 12f, text)
+        style(plain, 12f, LABEL, Paint.Align.CENTER)
+        patch(c, text.measureText(detail), CENTRE_Y + 7f, CENTRE_Y + 27f)
+        c.drawText(detail, CENTRE_X, CENTRE_Y + 21f, text)
+    }
+
+    private fun patch(c: Canvas, textWidth: Float, top: Float, bottom: Float) {
+        rect.set(CENTRE_X - textWidth / 2f - 7f, top, CENTRE_X + textWidth / 2f + 7f, bottom)
+        fill.shader = null
+        fill.color = PLOT
+        c.drawRoundRect(rect, 6f, 6f, fill)
+    }
 
     // ---- notice ---------------------------------------------------------------------
 
@@ -505,14 +558,17 @@ class GaugePainter {
         const val DESIGN_W = 736f
         const val DESIGN_H = 442f
         private const val CENTRE_X = 368f
-        private const val CENTRE_Y = 232f
-        private const val LIGHTS_Y = 53f
+        private const val CENTRE_Y = 217f
+        private const val LIGHTS_Y = 24f
         private const val NOTICE_Y = 413f
 
         // gauges
         private const val SIDE_R = 116f
-        private const val LEFT_X = 130f
-        private const val RIGHT_X = 606f
+        /** The oil dials are drawn at 116 and enlarged by this much. */
+        private const val SIDE_SCALE = 1.1f
+        // tucked 76 units behind the G-meter
+        private const val LEFT_X = 154.4f
+        private const val RIGHT_X = 581.6f
         private const val BAND_R = SIDE_R - 35f
         private const val HUB_R = 24f
         private const val NUMERAL = 21f

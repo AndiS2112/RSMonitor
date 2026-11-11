@@ -9,8 +9,9 @@ It shows three things on the car screen:
 - A five-stage shift light
 
 Status: **design done, app partly built.** In the car, the app connects to the adapter,
-reaches the engine and gearbox, and shows on Android Auto with live engine speed. The gauge
-screen from the design is drawn, but the oil temperatures and the G-meter have no data yet.
+reaches the engine and gearbox, and shows on Android Auto with live engine speed. The G-meter
+runs from the phone's motion sensor once calibrated. The oil temperatures have no data yet:
+their data IDs on this car are still being looked for.
 
 ## The design
 
@@ -25,6 +26,10 @@ The phone screen for finding and checking the car's data IDs:
 The previews are rendered without the web font, so the lettering falls back to a local font.
 On the design canvas the numbers and labels are set in Saira.
 
+These three images are the earlier 800×480 design. The app's screen has since moved on (see
+"Gauge screen layout in the app" below); every build draws the current screen to PNG files,
+published on the `previews` branch.
+
 ## The app (milestone 1)
 
 **What it does**
@@ -34,8 +39,46 @@ On the design canvas the numbers and labels are set in Saira.
   unit (7E0) and the gearbox unit (7E1).
 - Live engine speed, read from the engine unit as fast as the adapter allows.
 - Android Auto gauge screen, drawn from the design: the three gauges, the shift lights and
-  the notice. Only the shift lights have live data so far. The oil gauges show a dash until
-  their data IDs are found, and the G-meter shows dashes until the motion sensor is wired in.
+  the notice. The shift lights and the G-meter have live data. The oil gauges show a dash
+  until their data IDs are found.
+- G-meter from the phone's motion sensor, with peak numbers and a peak outline.
+- Peak engine-oil and gearbox-oil temperature (built, waiting for the oil readings).
+
+**Gauge screen layout in the app**
+
+- No title. The top row holds LIVE on the left, the five shift lights in the middle and the
+  adapter status on the right.
+- Oil gauges are 10% larger than in the first design and tucked 76 design units behind the
+  G-meter. The icon sits below the hub, on the G-meter side of the 50 mark.
+- Peak oil temperature: a thin amber hand on the scale at the highest temperature reached,
+  and a small amber "PEAK" number above the hub on the G-meter side. The peak is never shown
+  below the current reading.
+- Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
+
+**G-meter**
+
+The phone can lie any way round (it lives in the cupholder), so it has to be calibrated each
+time it is put down. On the phone screen, in the G-METER panel:
+
+1. Wedge the phone so it cannot slide, with the car parked, and tap **Calibrate**. The app
+   takes about three seconds to find which way is down.
+2. Pull away forwards in a straight line. The first steady push (0.08 g for one second) is
+   taken as "forward". The car screen shows which step it is waiting for.
+3. If that pull-away was in reverse, braking will show as accelerating: tap **Swap front and
+   back**.
+
+Up on the dial is accelerating, down is braking, right is turning right. **Reset peak G**
+clears the four peak numbers and the outline. A phone that slides or tips after calibration
+gives wrong readings until it is calibrated again; a long slope shows as a small steady offset.
+
+**When peaks reset**
+
+- Peak G: with the Reset peak G button, on a new calibration, and when the car is switched off.
+- Peak oil temperatures: when the car is switched off.
+- "Switched off" means the car has not answered for 30 seconds, after having answered at
+  least once. That covers the Bluetooth link dropping and the ignition going off while the
+  adapter stays powered. The 30 seconds only count while the app is asking the car something
+  (live data on, or a scan running) or the link is down.
 
 **Getting the APK**
 
@@ -85,7 +128,8 @@ launcher" in Android Auto's settings on the phone.
 | `app/src/main/java/com/rsmonitor/app/obd/` | Bluetooth links, the ELM327 command layer, reply parsing, and the shared connection |
 | `app/src/main/java/com/rsmonitor/app/ui/` | The phone screen (discovery console) |
 | `app/src/main/java/com/rsmonitor/app/car/` | The Android Auto screen and the shift-light rule |
-| `app/src/test/` | Unit tests for reply parsing and the shift-light rule, and a test that draws the gauge screen to PNG files |
+| `app/src/main/java/com/rsmonitor/app/drive/` | G-force from the motion sensor, calibration, and the peaks |
+| `app/src/test/` | Unit tests for reply parsing, the shift-light rule, calibration and the peaks, and a test that draws the gauge screen to PNG files |
 | `.github/workflows/build.yml` | Builds and tests the app on every push |
 
 ## What is in this repo
@@ -169,7 +213,8 @@ python3 tools/render_preview.py design design/preview
 - An icon beside each hub: oil can with thermometer, gear with thermometer.
 - G-meter: rings at 0.5, 1.0 and 1.5 g, crosshair, red peak trace, white dot for the current
   reading, four orange peak numbers.
-- Header is plain "RS MONITOR" text. No manufacturer logos are used.
+- The first design had a plain "RS MONITOR" text header; the app has none. No manufacturer
+  logos are used.
 - All readings in the design are sample numbers.
 
 **Palette and type**
@@ -228,6 +273,10 @@ Auto showing live RPM.
 3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
    only matters for which entry to pick in the adapter list.
 4. **Hot notice wording when only one oil is hot** (engine only, gearbox only).
+5. **Whether the motion sensor keeps reporting with the phone's screen off** while Android
+   Auto is running. Not yet checked in the car.
+6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
+   a second.
 5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
    time, so the lights may need to come on earlier than the figures above. This has to be
