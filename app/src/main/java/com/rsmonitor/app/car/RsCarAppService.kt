@@ -80,6 +80,10 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         val drive = Drive.state.value
         val rpm = ObdHub.rpm.value
         val ready = drive.stage == GTracker.Stage.Ready
+        val oil = ObdHub.oilTemp.value
+        val gearbox = ObdHub.gearTemp.value
+        // outside the red zones the value never changes, so the screen is not repainted for it
+        val inRedZone = (oil != null && oil >= GaugePainter.OIL_HOT) || (gearbox != null && gearbox >= GaugePainter.GEAR_HOT)
         // both halves of the flash last half a period; outside the flash the value never changes
         val flashOn = rpm == null || !ShiftLights.isFlashing(rpm) ||
             (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
@@ -88,8 +92,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             live = ObdHub.live.value,
             rate = ObdHub.rate.value,
             rpm = rpm,
-            oilTemp = ObdHub.oilTemp.value,
-            gearTemp = ObdHub.gearTemp.value,
+            oilTemp = oil,
+            gearTemp = gearbox,
             gear = ObdHub.gear.value,
             oilPeak = drive.oilPeak,
             gearPeak = drive.gearPeak,
@@ -106,7 +110,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             torque = ObdHub.torque.value,
             powerPeak = drive.powerPeak,
             torquePeak = drive.torquePeak,
-            torqueMissing = ObdHub.torqueSource.value == ObdHub.TorqueSource.Missing,
+            pulse = if (inRedZone) redZonePulse(SystemClock.elapsedRealtime()) else 1f,
             flashOn = flashOn,
         )
     }

@@ -142,10 +142,26 @@ class GaugePreviewTest {
         driven.copy(rpm = 1100, oilTemp = 46, gearTemp = 38, oilPeak = 46, gearPeak = 38, gLat = 0.01f, gLon = 0f, gear = Gear('P')),
     )
 
-    /** The engine does not offer torque: empty rings, dashes and a notice. */
+    /** The engine does not offer torque: empty rings and dashes. */
     @Test
     fun powerWithoutTorque() = render(
         "11-power-no-torque",
-        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, centre = Centre.Power, torqueMissing = true),
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, centre = Centre.Power),
+    )
+
+    // ---- the oil icons carry the state ----
+
+    /** Engine oil at operating temperature, gearbox oil not yet: only the gearbox icon is blue. */
+    @Test
+    fun warmingUp() = render(
+        "15-warming-up",
+        driven.copy(rpm = 2400, oilTemp = 86, gearTemp = 41, oilPeak = 86, gearPeak = 41, gLat = 0.18f, gLon = 0.10f, gear = Gear('D', 2)),
+    )
+
+    /** Both oils in the red zone, at the faint end of the pulse. */
+    @Test
+    fun redZoneAtTheLowPointOfThePulse() = render(
+        "16-red-zone-pulse-low",
+        driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 113, oilPeak = 134, gearPeak = 113, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
     )
 }

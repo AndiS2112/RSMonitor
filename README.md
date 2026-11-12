@@ -40,19 +40,30 @@ published on the `previews` branch.
 - Discovery console on the phone: type a command, see the reply, switch between the engine
   unit (7E0) and the gearbox unit (7E1).
 - Live engine speed, read from the engine unit as fast as the adapter allows.
-- Android Auto gauge screen, drawn from the design: the three gauges, the shift lights and
-  the notice. The shift lights, the G-meter and both oil gauges have live data.
+- Android Auto gauge screen, drawn from the design: the three gauges and the shift lights.
+  The shift lights, the G-meter and both oil gauges have live data.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
-- Peak engine-oil and gearbox-oil temperature (built, waiting for the oil readings).
+- Peak engine-oil and gearbox-oil temperature.
 - Power and torque page for the centre dial (built; whether this engine offers the torque
   reading it needs is not yet checked in the car).
 
 **Gauge screen layout in the app**
 
+- The three dials run from edge to edge of the car screen. The design box has the shape of
+  the screen area (844 × 442 units for the 1156 × 606 px the head unit gives the app), and
+  the dials are drawn 22% larger than their first size.
 - No title. The top row holds LIVE on the left, the five shift lights in the middle and the
   adapter status on the right.
-- Oil gauges are 10% larger than in the first design and tucked 76 design units behind the
-  G-meter. The icon sits below the hub, on the G-meter side of the 50 mark.
+- Oil gauges are tucked behind the centre dial. The icon sits below the hub, on the centre
+  dial's side of the lowest numeral.
+- **No text notices.** Each oil's icon carries its state instead: grey at operating
+  temperature, blue below it, and red, pulsing three times a second, in the red zone. The
+  temperature number under the gauge also turns red in the red zone.
+- Engine oil: scale 50 – 100 – 150 °C, blue below 80 °C, red zone from 130 °C.
+- Gearbox oil: scale 30 – 90 – 120 °C, blue below 45 °C, red zone from 110 °C. The middle
+  numeral always sits level with the hub, so each half of a scale has its own spacing.
+- Whether the adapter is connected and live data is on shows only in the top corners
+  ("OBD off", "PAUSED").
 - Peak oil temperature: a thin amber hand on the scale at the highest temperature reached,
   and a small amber "PEAK" number above the hub on the G-meter side. The peak is never shown
   below the current reading.
@@ -82,8 +93,8 @@ torque; the button is named after the page it leads to, and the choice is rememb
   torque as a percentage of it (PID 62). Engine speed and the percentage are asked for in
   one request (`010C62`) so the shift lights do not slow down; if the engine will not answer
   both together, they are asked in turn.
-- If the engine does not offer these values, the dial shows dashes and a notice, and the
-  phone screen says so under "Live engine data". The fallback is Audi's own torque value,
+- If the engine does not offer these values, the dial shows dashes, and the phone screen
+  says so under "Live engine data". The fallback is Audi's own torque value,
   which needs its data ID found like the oil temperatures.
 
 **G-meter**
@@ -199,7 +210,7 @@ python3 tools/render_preview.py design design/preview
   right of "ENGINE OIL", to the left of "GEARBOX OIL". The reading has a fixed width so the
   label does not move as digits change.
 - A row of five shift lights sits under the title, above the G-meter.
-- A slot at the bottom is reserved for notices, so the gauges do not move when one appears.
+- (First design only; the app has no notices any more.) A slot at the bottom is reserved for notices, so the gauges do not move when one appears.
 
 **States**
 
@@ -296,8 +307,8 @@ Auto showing live RPM.
   and 20 °C at the next cold start. The app asks for it every three seconds while live.
 - **How the gearbox oil behaves:** it warms far more slowly than the engine (62 °C after
   20 minutes, with the engine oil at 98 °C). Warm, it sits at 70 to 75 °C on the move and
-  climbs to about 85 °C standing still. The "still cold below 80 °C" notice was chosen
-  before this was known and does not suit the gearbox.
+  climbs to about 85 °C standing still. Its gauge and limits are set for that: 45 °C counts
+  as operating temperature and the red zone starts at 110 °C.
 - **Engine oil temperature is data ID `11BD` on the engine control unit:** send `22 11 BD`
   to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 − 273.15.
   Confirmed on the car: the gauge matches the oil temperature on the instrument cluster.
@@ -323,7 +334,8 @@ Auto showing live RPM.
    They have to be found on the car and checked against the dash display and VCDS.
 3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
    only matters for which entry to pick in the adapter list.
-4. **Hot notice wording when only one oil is hot** (engine only, gearbox only).
+4. **Whether three pulses a second reads well on the car screen**, which repaints about 20
+   times a second.
 5. **Whether the motion sensor keeps reporting with the phone's screen off** while Android
    Auto is running. Not yet checked in the car.
 6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
