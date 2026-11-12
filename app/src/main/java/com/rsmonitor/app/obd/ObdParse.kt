@@ -28,18 +28,18 @@ const val GEARBOX_OIL_ID = 0x2104
 /**
  * Gearbox oil temperature in °C from the reply to "22 21 04": one byte, 40 below zero at 0.
  *
- * Checked on the car at the cold end, twice: after standing for days it read 19 °C with
- * 18 °C outside (`62 21 04 3B`), and 20 °C at the next cold start. On a 20 minute drive it
- * then rose to 62 °C while the engine oil reached 98 °C; this gearbox warms slowly and its
- * oil is cooled at the front of the car. The warm end has not been compared with VCDS yet.
+ * Confirmed on the car. After standing for days it read 19 °C with 18 °C outside
+ * (`62 21 04 3B`), and 20 °C at the next cold start. It warms far more slowly than the
+ * engine: 62 °C after 20 minutes with the engine oil at 98 °C. Warm, it sits at 70 to 75 °C
+ * on the move, where air cools it at the front of the car, and climbs to about 85 °C
+ * standing still.
  */
 fun gearboxOilCelsius(lines: List<String>): Int? = parseUdsData(lines, GEARBOX_OIL_ID)?.firstOrNull()?.minus(40)
 
 /**
- * The data ID taken to be the engine oil temperature on this car's engine control unit.
- * It is the best of four candidates from a cold and a warm scan (14.8 °C cold, 94.8 °C warm,
- * with 98 °C on the instrument cluster shortly before); still to be confirmed against the
- * cluster. The same value also appears under 15B7 and 1632.
+ * The data ID of the engine oil temperature on this car's engine control unit. Found by
+ * comparing a cold and a warm scan, then confirmed on the car: the gauge matches the oil
+ * temperature on the instrument cluster. The same value also appears under 15B7 and 1632.
  */
 const val ENGINE_OIL_ID = 0x11BD
 

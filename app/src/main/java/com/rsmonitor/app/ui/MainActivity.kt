@@ -304,7 +304,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
                     fontSize = 13.sp,
                 )
                 Text(
-                    text = oilTemp?.let { "Engine oil $it °C (ID 11BD, to be confirmed)" } ?: "Engine oil: no reading yet",
+                    text = oilTemp?.let { "Engine oil $it °C" } ?: "Engine oil: no reading yet",
                     color = Secondary,
                     fontSize = 13.sp,
                 )

@@ -12,9 +12,8 @@ It shows three things on the car screen:
 Status: **design done, app partly built.** In the car, the app connects to the adapter,
 reaches the engine and gearbox, and shows on Android Auto with live engine speed. The G-meter
 runs from the phone's motion sensor once calibrated. Both oil temperatures are read from
-the car; the engine's is the best of four candidates and still has to be checked against
-the instrument cluster. Engine torque and the gear have no data yet: their data IDs on this
-car are still being looked for.
+the car and have been checked against it. Engine torque and the gear have no data yet:
+their data IDs on this car are still being looked for.
 
 ## The design
 
@@ -292,17 +291,19 @@ Auto showing live RPM.
 - **Engine speed updates about 13 times a second** on this adapter, with only engine speed
   being polled.
 - **Gearbox oil temperature is data ID `2104` on the gearbox control unit:** send `22 21 04`
-  to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40. Checked
-  at the cold end twice: 19 °C after standing for days with 18 °C outside (`62 21 04 3B`),
-  and 20 °C at the next cold start. On a 20 minute drive it rose to 62 °C while the engine
-  oil reached 98 °C, so this gearbox warms much more slowly than the engine. The warm end
-  has not been compared with VCDS yet. The app asks for it every three seconds while live.
-- **Engine oil temperature is taken to be data ID `11BD` on the engine control unit:** send
-  `22 11 BD` to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 −
-  273.15. It read 14.8 °C cold and 94.8 °C warm, with 98 °C on the instrument cluster
-  shortly before. Still to be confirmed against the cluster. The other candidates from the
-  two scans, all near ambient when cold: `1291` (103.5 °C warm), `129A` (104.2 °C) and
-  `1063` (105.7 °C). `128A` (36 °C in the cold scan, 100.5 °C warm) looks like coolant.
+  to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40.
+  Confirmed on the car: 19 °C after standing for days with 18 °C outside (`62 21 04 3B`),
+  and 20 °C at the next cold start. The app asks for it every three seconds while live.
+- **How the gearbox oil behaves:** it warms far more slowly than the engine (62 °C after
+  20 minutes, with the engine oil at 98 °C). Warm, it sits at 70 to 75 °C on the move and
+  climbs to about 85 °C standing still. The "still cold below 80 °C" notice was chosen
+  before this was known and does not suit the gearbox.
+- **Engine oil temperature is data ID `11BD` on the engine control unit:** send `22 11 BD`
+  to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 − 273.15.
+  Confirmed on the car: the gauge matches the oil temperature on the instrument cluster.
+  Other temperatures seen in the two scans but not identified: `1291` (16.5 °C cold, 103.5 °C
+  warm), `129A` (104.2 °C warm), `1063` (105.7 °C warm), and `128A` (36 °C in the cold scan,
+  100.5 °C warm), which looks like coolant.
 - **How this engine stores temperatures:** one-byte values are raw × 0.75 − 48 °C; two-byte
   values are tenths of a kelvin.
 - **The engine does not offer the standard torque values.** `0163` is refused with
