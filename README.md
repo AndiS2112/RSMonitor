@@ -224,13 +224,15 @@ python3 tools/render_preview.py design design/preview
 
 | Light | Colour | Comes on at |
 |---|---|---|
-| 1 | Green | 4,000 rpm |
-| 2 | Yellow | 5,000 rpm |
-| 3 | Yellow | 6,000 rpm |
-| 4 | Yellow | 7,000 rpm |
-| 5 | Red | 8,000 rpm |
+| 1 | Green | 3,500 rpm |
+| 2 | Yellow | 4,000 rpm |
+| 3 | Yellow | 5,000 rpm |
+| 4 | Yellow | 6,000 rpm |
+| 5 | Red | 7,500 rpm |
 
-- From 8,200 rpm all five flash red: upshift.
+- From 8,000 rpm all five flash red: upshift.
+- These are the steps in the app. The first design files under `design/` still use the
+  earlier steps (4,000 to 8,000 rpm, flashing from 8,200).
 - Lights stay on once passed, so they fill from left to right. Unlit lights show as dark sockets.
 - The flash is four times a second and stops if the device asks for reduced motion.
 - The sample screens show the three cases: cold start at 1,500 rpm (all off), driving at
