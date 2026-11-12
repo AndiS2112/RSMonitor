@@ -123,10 +123,10 @@ class ObdParseTest {
 
     @Test
     fun gearboxOilTemperatureAsReadOnTheCar() {
-        // the car's own answer on a cold evening, 18 °C outside
-        assertEquals(19, gearboxOilCelsius(listOf("7E9 04 62 21 04 3B")))
-        assertEquals(82, gearboxOilCelsius(listOf("7E904622104 7A")))
-        assertEquals(-10, gearboxOilCelsius(listOf("7E9 04 62 21 04 1E")))
+        // the byte is the temperature: 0x3B is 59 °C, 0x55 is 85 °C
+        assertEquals(59, gearboxOilCelsius(listOf("7E9 04 62 21 04 3B")))
+        assertEquals(85, gearboxOilCelsius(listOf("7E904622104 55")))
+        assertEquals(122, gearboxOilCelsius(listOf("7E9 04 62 21 04 7A")))
         assertNull(gearboxOilCelsius(listOf("7E9 03 7F 22 31")))
         assertNull(gearboxOilCelsius(listOf("NO DATA")))
     }

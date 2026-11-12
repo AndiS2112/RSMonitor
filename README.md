@@ -292,9 +292,10 @@ Auto showing live RPM.
 - **Engine speed updates about 13 times a second** on this adapter, with only engine speed
   being polled.
 - **Gearbox oil temperature is data ID `2104` on the gearbox control unit:** send `22 21 04`
-  to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40. Checked
-  on a cold car: `62 21 04 3B` (59) with 18 °C outside, so 19 °C. The app asks for it every
-  three seconds while live.
+  to 7E1. The answer carries one byte, and that byte is the temperature in °C. A first
+  version subtracted 40; driven, the gauge then sat at 40 to 50 °C, which is 40 too low for
+  this gearbox, so the offset was removed. Not yet compared with VCDS. The app asks for it
+  every three seconds while live.
 - **The engine does not offer the standard torque values.** `0163` is refused with
   `7F 01 12`. Torque will have to come from one of Audi's own data IDs.
 - **Engine data IDs tried and refused:** `22 20 A1` and `22 F4 5C`. A scan of engine IDs
