@@ -90,6 +90,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             rpm = rpm,
             oilTemp = ObdHub.oilTemp.value,
             gearTemp = ObdHub.gearTemp.value,
+            gear = ObdHub.gear.value,
             oilPeak = drive.oilPeak,
             gearPeak = drive.gearPeak,
             gStage = drive.stage,

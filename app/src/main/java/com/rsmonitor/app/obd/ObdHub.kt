@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.os.SystemClock
 import com.rsmonitor.app.drive.Drive
+import com.rsmonitor.app.drive.Gear
 import com.rsmonitor.app.drive.metricHorsepower
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -94,6 +95,10 @@ object ObdHub {
     // The engine oil temperature stays empty until its data ID on this car is known.
     private val _oilTemp = MutableStateFlow<Int?>(null)
     val oilTemp: StateFlow<Int?> = _oilTemp
+
+    // Stays empty until the gearbox's data ID for the selector position and gear is known.
+    private val _gear = MutableStateFlow<Gear?>(null)
+    val gear: StateFlow<Gear?> = _gear
 
     private val _gearTemp = MutableStateFlow<Int?>(null)
     /** Gearbox oil temperature in °C, asked from the gearbox control unit every few seconds while live. */

@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import com.rsmonitor.app.drive.GTracker
+import com.rsmonitor.app.drive.Gear
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -29,6 +30,8 @@ data class GaugeFrame(
     val rpm: Int? = null,
     val oilTemp: Int? = null,
     val gearTemp: Int? = null,
+    /** Selector position and engaged gear; nothing is drawn while it is not known. */
+    val gear: Gear? = null,
     /** Highest oil temperatures since the car was last switched off. */
     val oilPeak: Int? = null,
     val gearPeak: Int? = null,
@@ -81,6 +84,7 @@ class GaugePainter {
         c.scale(scale, scale)
 
         header(c, f)
+        gear(c, f)
         shiftLights(c, f)
         sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_HOT, f.oilTemp, f.oilPeak, "ENGINE OIL", engineIcon = true)
         sideGauge(c, RIGHT_X, 1, 50, 130, intArrayOf(50, 100, 130), GEAR_HOT, f.gearTemp, f.gearPeak, "GEARBOX OIL", engineIcon = false)
@@ -110,6 +114,24 @@ class GaugePainter {
     }
 
     // ---- shift lights -----------------------------------------------------------
+
+    /**
+     * The gear, just left of the shift lights so the two read together: a small mode letter
+     * and a large gear number ("D 4"), or one large letter for P, R and N.
+     */
+    private fun gear(c: Canvas, f: GaugeFrame) {
+        val g = f.gear ?: return
+        val right = CENTRE_X - LIGHTS_HALF_WIDTH - 22f
+        val baseline = LIGHTS_Y + 15f
+        val large = g.number?.toString() ?: g.mode.toString()
+        style(numerals, 43f, INK, Paint.Align.RIGHT)
+        val largeW = text.measureText(large)
+        c.drawText(large, right, baseline, text)
+        if (g.number != null) {
+            style(bold, 17f, MUTED, Paint.Align.RIGHT, 0.16f)
+            c.drawText(g.mode.toString(), right - largeW - 5f, baseline, text)
+        }
+    }
 
     private fun shiftLights(c: Canvas, f: GaugeFrame) {
         val rpm = f.rpm
@@ -736,6 +758,8 @@ class GaugePainter {
         private const val CENTRE_X = 368f
         private const val CENTRE_Y = 217f
         private const val LIGHTS_Y = 24f
+        /** From the middle of the row of five lights to its outer edge. */
+        private const val LIGHTS_HALF_WIDTH = 83f
         private const val NOTICE_Y = 413f
 
         // gauges

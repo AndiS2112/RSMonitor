@@ -7,6 +7,7 @@ import com.rsmonitor.app.car.Centre
 import com.rsmonitor.app.car.GaugeFrame
 import com.rsmonitor.app.car.GaugePainter
 import com.rsmonitor.app.drive.GTracker
+import com.rsmonitor.app.drive.Gear
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.cos
@@ -119,6 +120,26 @@ class GaugePreviewTest {
     fun powerCruising() = render(
         "10-power-cruising",
         powerPage.copy(rpm = 2400, oilTemp = 108, gearTemp = 92, torque = 112, power = 38, torquePeak = 430, powerPeak = 450),
+    )
+
+    // ---- with the gear shown beside the shift lights ----
+
+    @Test
+    fun gearDriving() = render(
+        "12-gear-driving",
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 88, oilPeak = 118, gearPeak = 96, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4)),
+    )
+
+    @Test
+    fun gearOnThePowerPage() = render(
+        "13-gear-power-page",
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 88, torque = 430, power = 306, torquePeak = 430, powerPeak = 306, gear = Gear('S', 3)),
+    )
+
+    @Test
+    fun gearParked() = render(
+        "14-gear-parked",
+        driven.copy(rpm = 1100, oilTemp = 46, gearTemp = 38, oilPeak = 46, gearPeak = 38, gLat = 0.01f, gLon = 0f, gear = Gear('P')),
     )
 
     /** The engine does not offer torque: empty rings, dashes and a notice. */

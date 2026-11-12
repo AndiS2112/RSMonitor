@@ -59,6 +59,12 @@ published on the `previews` branch.
   below the current reading.
 - Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
 
+**Gear**
+
+The selector position and gear are drawn just left of the shift lights: a small mode letter
+and a large gear number ("D 4", "S 3"), or one large letter for P, R and N. The drawing is
+built, but nothing shows in the car yet: the gearbox's data ID for it has not been found.
+
 **Power and torque**
 
 A button on the car screen switches the centre dial between the G-meter and power and
@@ -311,8 +317,14 @@ Auto showing live RPM.
    Auto is running. Not yet checked in the car.
 6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
    a second.
-7. **Whether the engine answers the standard torque values** (PIDs 62 and 63), and if so
-   whether it answers engine speed and torque in one request.
+7. **Engine torque.** The engine refuses the standard torque value (`0163`), so torque has
+   to come from one of the car's own data IDs. The gearbox lists engine torque among its
+   measuring values in VCDS, so that is where it is being looked for.
+8. **The gear.** Its data ID on the gearbox is not known yet. Two scans of the gearbox, one
+   in P and one in D with the brake held, should show it as one of the few values that differ.
+9. **Planned, once the data IDs are confirmed:** move the two car-screen buttons (live data
+   on/off, and the G-meter/power switch) to the phone screen, leaving no buttons on the car
+   screen.
 5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
    time, so the lights may need to come on earlier than the figures above. This has to be
