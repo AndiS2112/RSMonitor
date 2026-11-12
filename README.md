@@ -11,9 +11,10 @@ It shows three things on the car screen:
 
 Status: **design done, app partly built.** In the car, the app connects to the adapter,
 reaches the engine and gearbox, and shows on Android Auto with live engine speed. The G-meter
-runs from the phone's motion sensor once calibrated. The gearbox oil temperature is read
-from the car. The engine oil temperature and engine torque have no data yet: their data IDs
-on this car are still being looked for.
+runs from the phone's motion sensor once calibrated. Both oil temperatures are read from
+the car; the engine's is the best of four candidates and still has to be checked against
+the instrument cluster. Engine torque and the gear have no data yet: their data IDs on this
+car are still being looked for.
 
 ## The design
 
@@ -41,8 +42,7 @@ published on the `previews` branch.
   unit (7E0) and the gearbox unit (7E1).
 - Live engine speed, read from the engine unit as fast as the adapter allows.
 - Android Auto gauge screen, drawn from the design: the three gauges, the shift lights and
-  the notice. The shift lights, the G-meter and the gearbox oil gauge have live data. The
-  engine oil gauge shows a dash until its data ID is found.
+  the notice. The shift lights, the G-meter and both oil gauges have live data.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
 - Peak engine-oil and gearbox-oil temperature (built, waiting for the oil readings).
 - Power and torque page for the centre dial (built; whether this engine offers the torque
@@ -297,6 +297,14 @@ Auto showing live RPM.
   and 20 °C at the next cold start. On a 20 minute drive it rose to 62 °C while the engine
   oil reached 98 °C, so this gearbox warms much more slowly than the engine. The warm end
   has not been compared with VCDS yet. The app asks for it every three seconds while live.
+- **Engine oil temperature is taken to be data ID `11BD` on the engine control unit:** send
+  `22 11 BD` to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 −
+  273.15. It read 14.8 °C cold and 94.8 °C warm, with 98 °C on the instrument cluster
+  shortly before. Still to be confirmed against the cluster. The other candidates from the
+  two scans, all near ambient when cold: `1291` (103.5 °C warm), `129A` (104.2 °C) and
+  `1063` (105.7 °C). `128A` (36 °C in the cold scan, 100.5 °C warm) looks like coolant.
+- **How this engine stores temperatures:** one-byte values are raw × 0.75 − 48 °C; two-byte
+  values are tenths of a kelvin.
 - **The engine does not offer the standard torque values.** `0163` is refused with
   `7F 01 12`. Torque will have to come from one of Audi's own data IDs.
 - **Engine data IDs tried and refused:** `22 20 A1` and `22 F4 5C`. A scan of engine IDs

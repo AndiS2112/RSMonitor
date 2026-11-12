@@ -35,6 +35,24 @@ const val GEARBOX_OIL_ID = 0x2104
  */
 fun gearboxOilCelsius(lines: List<String>): Int? = parseUdsData(lines, GEARBOX_OIL_ID)?.firstOrNull()?.minus(40)
 
+/**
+ * The data ID taken to be the engine oil temperature on this car's engine control unit.
+ * It is the best of four candidates from a cold and a warm scan (14.8 °C cold, 94.8 °C warm,
+ * with 98 °C on the instrument cluster shortly before); still to be confirmed against the
+ * cluster. The same value also appears under 15B7 and 1632.
+ */
+const val ENGINE_OIL_ID = 0x11BD
+
+/**
+ * Engine oil temperature in °C from the reply to "22 11 BD": two bytes, in tenths of a
+ * kelvin. `62 11 BD 0E 5F` is 367.9 K, so 94.75 °C.
+ */
+fun engineOilCelsius(lines: List<String>): Int? {
+    val data = parseUdsData(lines, ENGINE_OIL_ID) ?: return null
+    if (data.size < 2) return null
+    return Math.round((data[0] * 256 + data[1]) / 10f - 273.15f)
+}
+
 /** How many data bytes each standard value the app asks for carries. */
 private val PID_BYTES = mapOf(0x05 to 1, 0x0C to 2, 0x61 to 1, 0x62 to 1, 0x63 to 2)
 

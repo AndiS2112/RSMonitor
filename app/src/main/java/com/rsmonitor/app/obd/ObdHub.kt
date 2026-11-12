@@ -41,9 +41,11 @@ object ObdHub {
     /** An engine-speed reading older than this is no longer shown. */
     private const val STALE_MS = 2_000L
 
-    /** Oil temperature moves slowly, and asking the gearbox costs engine-speed readings. */
+    /** Oil temperatures move slowly, and every question about them costs an engine-speed reading. */
     private const val GEAR_PERIOD_MS = 3_000L
     private const val GEAR_STALE_MS = 10_000L
+    private const val OIL_PERIOD_MS = 3_000L
+    private const val OIL_STALE_MS = 10_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
@@ -92,8 +94,8 @@ object ObdHub {
     /** Engine power in metric horsepower, from torque and engine speed. */
     val power: StateFlow<Int?> = _power
 
-    // The engine oil temperature stays empty until its data ID on this car is known.
     private val _oilTemp = MutableStateFlow<Int?>(null)
+    /** Engine oil temperature in °C, asked from the engine control unit every few seconds while live. */
     val oilTemp: StateFlow<Int?> = _oilTemp
 
     // Stays empty until the gearbox's data ID for the selector position and gear is known.
@@ -324,6 +326,7 @@ object ObdHub {
         _power.value = null
         _torqueSource.value = TorqueSource.Unknown
         _gearTemp.value = null
+        _oilTemp.value = null
     }
 
     /**
@@ -350,6 +353,8 @@ object ObdHub {
             var turn = 0
             var gearAsked = 0L
             var gearRead = 0L
+            var oilAsked = 0L
+            var oilRead = 0L
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
                 val request = when {
@@ -406,7 +411,23 @@ object ObdHub {
                         lastTorque = SystemClock.elapsedRealtime()
                     }
 
-                    // every few seconds, while the car is answering, ask the gearbox for its oil temperature
+                    // every few seconds, while the car is answering, ask the engine for its oil temperature
+                    if (now - oilAsked >= OIL_PERIOD_MS && now - lastReading < STALE_MS) {
+                        oilAsked = now
+                        val answer = lock.withLock {
+                            ensureHeader(e, ENGINE, log = false)
+                            e.command("22%04X".format(ENGINE_OIL_ID), 1_500)
+                        }
+                        val celsius = engineOilCelsius(answer)
+                        if (celsius != null) {
+                            oilRead = SystemClock.elapsedRealtime()
+                            heard()
+                            _oilTemp.value = celsius
+                            Drive.onOilTemperature(celsius)
+                        }
+                    }
+
+                    // and, at the same pace, the gearbox for its own
                     if (now - gearAsked >= GEAR_PERIOD_MS && now - lastReading < STALE_MS) {
                         gearAsked = now
                         val answer = lock.withLock {
@@ -436,6 +457,7 @@ object ObdHub {
                     _power.value = null
                 }
                 if (now - gearRead > GEAR_STALE_MS) _gearTemp.value = null
+                if (now - oilRead > OIL_STALE_MS) _oilTemp.value = null
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
                     count = 0

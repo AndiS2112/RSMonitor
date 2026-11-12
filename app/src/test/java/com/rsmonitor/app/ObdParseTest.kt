@@ -1,5 +1,6 @@
 package com.rsmonitor.app
 
+import com.rsmonitor.app.obd.engineOilCelsius
 import com.rsmonitor.app.obd.gearboxOilCelsius
 import com.rsmonitor.app.obd.hexString
 import com.rsmonitor.app.obd.isCarReply
@@ -119,6 +120,16 @@ class ObdParseTest {
         assertFalse(isPositiveRead(listOf("7E8 03 7F 22 31")))
         assertFalse(isPositiveRead(listOf("NO DATA")))
         assertFalse(isPositiveRead(emptyList()))
+    }
+
+    @Test
+    fun engineOilTemperatureAsReadOnTheCar() {
+        // the two values from the scans: 2879 and 3679 tenths of a kelvin
+        assertEquals(15, engineOilCelsius(listOf("7E8 05 62 11 BD 0B 3F")))
+        assertEquals(95, engineOilCelsius(listOf("7E80562 11BD0E5F")))
+        assertEquals(-10, engineOilCelsius(listOf("7E8 05 62 11 BD 0A 47")))
+        assertNull(engineOilCelsius(listOf("7E8 03 7F 22 31")))
+        assertNull(engineOilCelsius(listOf("7E8 04 62 11 BD 0E")))
     }
 
     @Test
