@@ -174,8 +174,8 @@ private fun ConsoleScreen() {
 }
 
 /**
- * Calls the peak oil temperatures up on the car screen, where they are otherwise hidden. They
- * stay for ten seconds; tapping again puts them away sooner.
+ * Calls the exact peak oil temperatures up on the car screen, which otherwise only marks the
+ * peaks with an amber hand. They stay for ten seconds; tapping again puts them away sooner.
  */
 @Composable
 private fun PeakTempPanel() {

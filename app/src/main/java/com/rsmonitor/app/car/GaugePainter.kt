@@ -44,7 +44,10 @@ data class GaugeFrame(
     /** Highest oil temperatures since the car was last switched off. */
     val oilPeak: Int? = null,
     val gearPeak: Int? = null,
-    /** True while the peaks have been called up from the phone; they are hidden otherwise. */
+    /**
+     * True while the exact peaks have been called up from the phone. The amber peak hands are
+     * always drawn; the peak numbers appear only then.
+     */
     val showPeaks: Boolean = false,
     /** Where the G-meter's calibration stands; readings exist only once it is ready. */
     val gStage: GTracker.Stage = GTracker.Stage.Uncalibrated,
@@ -77,8 +80,9 @@ data class GaugeFrame(
  * Draws the gauge screen from the design: engine oil left, the centre dial (G-meter, or power
  * and torque), gearbox oil right, the gear and shift lights in the top row. The three dials
  * run from edge to edge of the car screen. There is no text notice: each oil's icon is blue
- * below operating temperature and red, pulsing, in the red zone. The peak oil temperatures
- * show only while they are called up from the phone. All geometry is in the design's own
+ * below operating temperature and red, pulsing, in the red zone. An amber hand marks each
+ * oil's peak at all times; the peak as a number shows only while it is called up from the
+ * phone. All geometry is in the design's own
  * units (an 844×442 box) and scaled to whatever area the car gives. Uses only
  * android.graphics, so it can be rendered to a bitmap in tests.
  */
@@ -250,13 +254,9 @@ class GaugePainter {
         c.drawCircle(cx, cy, 21.5f, fill)
         fill.shader = null
 
-        // Highest temperature reached, shown only while it is called up from the phone: a thin
-        // amber hand across the dot band, under the needle. Never below the current reading.
-        val peakShown = when {
-            !showPeak -> null
-            peak != null && value != null -> max(peak, value)
-            else -> peak ?: value
-        }
+        // Highest temperature reached: a thin amber hand across the dot band, under the needle,
+        // there at all times. It is never shown below the current reading.
+        val peakShown = if (peak != null && value != null) max(peak, value) else peak
         if (peakShown != null) {
             val a = angle(peakShown.coerceIn(lo, hi).toFloat(), lo, mid, hi, side)
             stroke(PEAK, 2.5f, Paint.Cap.ROUND)
@@ -297,9 +297,10 @@ class GaugePainter {
         c.restore()
 
         // Name and precise reading under the gauge; the reading keeps a fixed width. While the
-        // peak is called up it takes this place: "PEAK TEMP" and the peak, in amber.
+        // exact peak is called up from the phone it takes this place: "PEAK TEMP" and the peak,
+        // in amber.
         val name = if (showPeak) "PEAK TEMP" else label
-        val number = if (showPeak) peakShown else value
+        val number = if (showPeak) peakShown ?: value else value
         val colour = when {
             number == null -> MUTED
             showPeak -> PEAK

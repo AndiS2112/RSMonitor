@@ -43,7 +43,8 @@ published on the `previews` branch.
 - Android Auto gauge screen, drawn from the design: the three gauges and the shift lights.
   The shift lights, the G-meter and both oil gauges have live data.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
-- Peak engine-oil and gearbox-oil temperature, called up on the car screen from the phone.
+- Peak engine-oil and gearbox-oil temperature: an amber hand on each scale, and the exact
+  figures called up on the car screen from the phone.
 - Power and torque page for the centre dial (built; whether this engine offers the torque
   reading it needs is not yet checked in the car).
 
@@ -67,11 +68,11 @@ published on the `previews` branch.
 - Gearbox oil: scale 30 – 80 – 130 °C, blue below 50 °C, red zone from 115 °C.
 - Whether the adapter is connected and live data is on shows only in the top corners
   ("OBD off", "PAUSED").
-- Peak oil temperature is hidden until it is asked for. The **Peak Temp** button on the
-  phone calls it up for ten seconds (tapping again puts it away sooner): the row under each
-  gauge then reads "PEAK TEMP" with the peak in amber in place of the current reading, and a
-  thin amber hand marks the peak on the scale. The peak is never shown below the current
-  reading.
+- Peak oil temperature: a thin amber hand marks the peak on each scale at all times. The
+  exact figure is hidden until it is asked for: the **Peak Temp** button on the phone calls
+  it up for ten seconds (tapping again puts it away sooner), and the row under each gauge
+  then reads "PEAK TEMP" with the peak in amber in place of the current reading. The peak
+  is never shown below the current reading.
 - Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
 
 **Gear**

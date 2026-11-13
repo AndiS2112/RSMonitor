@@ -45,12 +45,12 @@ object Drive : SensorEventListener {
     private val _peakTempsUntil = MutableStateFlow(PeakCallout.HIDDEN)
 
     /**
-     * When the peak oil temperatures leave the car screen again, on the
+     * When the exact peak oil temperatures leave the car screen again, on the
      * [SystemClock.elapsedRealtime] clock; [PeakCallout.HIDDEN] while they are not shown.
      */
     val peakTempsUntil: StateFlow<Long> = _peakTempsUntil
 
-    /** The phone's Peak Temp button: shows the peaks on the car screen, or puts them away. */
+    /** The phone's Peak Temp button: shows the exact peaks on the car screen, or puts them away. */
     fun togglePeakTemps() {
         _peakTempsUntil.value = callout.toggle(SystemClock.elapsedRealtime())
     }

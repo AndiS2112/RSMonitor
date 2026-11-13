@@ -79,13 +79,21 @@ class GaugePreviewTest {
     )
 
     /**
-     * The peaks called up from the phone after a hard run: the needles have dropped back, the
-     * amber hands stand at the peaks, and the rows under the gauges read PEAK TEMP.
+     * The exact peaks called up from the phone after a hard run: the needles have dropped
+     * back, the amber hands stand at the peaks as always, and the rows under the gauges read
+     * PEAK TEMP.
      */
     @Test
     fun peaksCalledUp() = render(
         "4-peaks-called-up",
         driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 84, oilPeak = 138, gearPeak = 121, showPeaks = true, gLat = 0.05f, gLon = 0.03f),
+    )
+
+    /** The same moment without the call-out: amber hands at the peaks, current readings below. */
+    @Test
+    fun coolingDown() = render(
+        "18-cooling-down-peak-hands",
+        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 84, oilPeak = 138, gearPeak = 121, gLat = 0.05f, gLon = 0.03f),
     )
 
     /** Called up before the car has given any oil temperature: dashes, no hands. */

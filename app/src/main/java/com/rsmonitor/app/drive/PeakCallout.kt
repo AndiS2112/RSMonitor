@@ -1,8 +1,8 @@
 package com.rsmonitor.app.drive
 
 /**
- * The peak oil temperatures stay off the car screen until they are asked for from the phone.
- * Asking shows them for [showForMillis]; asking again while they show puts them away at once.
+ * The car screen marks each oil's peak with an amber hand, but the exact peak temperatures
+ * stay off it until they are asked for from the phone. Asking shows them for [showForMillis]; asking again while they show puts them away at once.
  * Plain state, no Android types; times are any steadily rising clock, in milliseconds.
  */
 class PeakCallout(private val showForMillis: Long = SHOW_FOR_MS) {
