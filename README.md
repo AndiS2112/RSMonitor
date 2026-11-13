@@ -403,10 +403,13 @@ Auto showing live RPM.
    enough is not known.
 8. **S cannot be told from D** with the values found so far, so S shows as D. Finding it
    means scanning a wider range of gearbox IDs once in D and once in S.
-9. **How fast the screen updates** now that engine speed, torque and the gear all come from
-   the gearbox. In the recordings a single value took about 95 ms and three together about
-   185 ms, so the shift lights should get about 8 readings a second on the G-meter page and
-   about 4.5 on the power page. To be checked on the car (the rate shows top right).
+9. **How fast the screen updates.** With engine speed, torque and the gear all coming from
+   the gearbox, the first build gave about 5 readings a second on the power page, and the
+   shift lights felt slow. Three changes since: torque is asked for on its own instead of
+   in one long answer with engine speed; a Bluetooth LE adapter is asked for the short
+   connection interval; and the adapter is tried with a "1" after each request, so it hands
+   the answer over without waiting for more (the console says "Short waits: on" when the
+   adapter takes it). The rate shows top right on the car screen; to be checked on the car.
 10. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
    phone. Android Auto does not allow this kind of screen with no button at all, so one icon
    button (switch page) remains; it should show only for about ten seconds after the screen

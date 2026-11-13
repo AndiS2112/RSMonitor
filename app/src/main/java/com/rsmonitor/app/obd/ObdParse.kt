@@ -47,8 +47,10 @@ const val ENGINE_OIL_ID = 0x11BD
  * Engine oil temperature in °C from the reply to "22 11 BD": two bytes, in tenths of a
  * kelvin. `62 11 BD 0E 5F` is 367.9 K, so 94.75 °C.
  */
-fun engineOilCelsius(lines: List<String>): Int? {
-    val data = parseUdsData(lines, ENGINE_OIL_ID) ?: return null
+fun engineOilCelsius(lines: List<String>): Int? = parseUdsData(lines, ENGINE_OIL_ID)?.let { engineOilCelsiusOf(it) }
+
+/** The same from the two data bytes alone. */
+fun engineOilCelsiusOf(data: List<Int>): Int? {
     if (data.size < 2) return null
     return Math.round((data[0] * 256 + data[1]) / 10f - 273.15f)
 }

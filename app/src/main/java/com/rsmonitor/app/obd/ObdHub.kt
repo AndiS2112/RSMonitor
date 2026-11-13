@@ -55,10 +55,6 @@ object ObdHub {
     private const val GEARBOX_GIVE_UP = 5
     private const val GEARBOX_RETRY_MS = 5_000L
 
-    /** Engine speed, engine torque and the gear, asked for together while the power page shows. */
-    private val FAST_IDS = listOf(GEARBOX_SPEED_ID, GEARBOX_TORQUE_ID, GEARBOX_GEAR_ID)
-    private val FAST_SIZES = listOf(2, 2, 1)
-
     /** Set by the car screen: true while the centre dial shows power and torque. */
     @Volatile
     var torqueWanted = false
@@ -442,12 +438,18 @@ object ObdHub {
      *
      * Everything fast comes from the gearbox control unit, so the adapter does not have to be
      * pointed back and forth: engine speed in every round and, while the centre dial shows
-     * power ([torqueWanted]), engine torque and the gear with it in the same answer. Twice a
-     * second the gear and the selector are asked for; every few seconds the gearbox's mode
+     * power ([torqueWanted]), engine torque straight after it. Twice a second the gear and
+     * the selector are asked for; every few seconds the gearbox's mode
      * byte and oil temperature, and, from the engine control unit, the engine oil temperature.
      *
      * If the gearbox stops answering for engine speed, the engine is asked instead ("010C"),
      * and the gearbox is tried again every few seconds.
+     *
+     * Every request here has an answer of one CAN frame. Once the car is answering, the
+     * adapter is tried with a "1" after the request, which tells it to hand the answer over
+     * as soon as that one frame has arrived instead of waiting to see whether more follow.
+     * Adapters that understand it answer much faster; if this one does not, requests go out
+     * as before.
      */
     private fun startPolling() {
         poller?.cancel()
@@ -457,6 +459,7 @@ object ObdHub {
             var lastReading = windowStart
             var lastTorque = windowStart
             var lastGear = 0L
+            var quick: Boolean? = null     // whether the adapter takes a "1" after a request; null until tried
             var groups = true              // the gearbox answers several IDs in one request
             var groupMisses = 0
             var gearboxMisses = 0          // rounds in a row without engine speed from the gearbox
@@ -473,7 +476,7 @@ object ObdHub {
             /** Several gearbox IDs in one request; null when that did not work, and for good after three failures. */
             suspend fun group(e: Elm327, ids: List<Int>, sizes: List<Int>): List<List<Int>>? {
                 if (!groups) return null
-                val values = readGroup(e, GEARBOX, ids, sizes)
+                val values = readGroup(e, GEARBOX, ids, sizes, quick == true)
                 if (values != null) groupMisses = 0 else if (++groupMisses >= 3) groups = false
                 return values
             }
@@ -487,19 +490,11 @@ object ObdHub {
                     var gearSeen = false
 
                     if (gearboxMisses < GEARBOX_GIVE_UP || started >= gearboxRetryAt) {
-                        if (torqueWanted) {
-                            val values = group(e, FAST_IDS, FAST_SIZES)
-                            if (values != null) {
-                                speed = gearboxEngineSpeed(values[0])
-                                nm = gearboxEngineTorque(values[1])
-                                engaged = values[2][0]
-                                gearSeen = true
-                            } else {
-                                speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID))
-                                nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID))
-                            }
-                        } else {
-                            speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID))
+                        speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick == true))
+                        // Torque is a request of its own. Asked for together with engine speed
+                        // the answer no longer fits one frame, and that took as long as two.
+                        if (torqueWanted && speed != null) {
+                            nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID, quick == true))
                         }
                         if (speed != null) {
                             gearboxMisses = 0
@@ -510,9 +505,16 @@ object ObdHub {
                     if (speed == null && gearboxMisses >= GEARBOX_GIVE_UP) {
                         val reply = lock.withLock {
                             ensureHeader(e, ENGINE, log = false)
-                            e.command("010C", 1_500)
+                            e.command(if (quick == true) "010C1" else "010C", 1_500)
                         }
                         speed = parseRpm(reply)
+                    }
+
+                    // the car is answering: find out once whether the adapter takes the short form
+                    if (speed != null && quick == null && gearboxMisses == 0) {
+                        val works = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick = true)) != null
+                        quick = works
+                        append("live", if (works) "Short waits: on" else "Short waits: not supported by this adapter", failed = false)
                     }
 
                     val now = SystemClock.elapsedRealtime()
@@ -546,11 +548,11 @@ object ObdHub {
                             selector = pair[1][0]
                             gearSeen = true
                         } else {
-                            readOne(e, GEARBOX, GEARBOX_GEAR_ID)?.firstOrNull()?.let {
+                            readOne(e, GEARBOX, GEARBOX_GEAR_ID, quick == true)?.firstOrNull()?.let {
                                 engaged = it
                                 gearSeen = true
                             }
-                            readOne(e, GEARBOX, GEARBOX_SELECTOR_ID)?.firstOrNull()?.let { selector = it }
+                            readOne(e, GEARBOX, GEARBOX_SELECTOR_ID, quick == true)?.firstOrNull()?.let { selector = it }
                         }
                     }
 
@@ -562,8 +564,8 @@ object ObdHub {
                             mode = pair[0][0]
                             pair[1][0]
                         } else {
-                            readOne(e, GEARBOX, GEARBOX_MODE_ID)?.firstOrNull()?.let { mode = it }
-                            readOne(e, GEARBOX, GEARBOX_OIL_ID)?.firstOrNull()
+                            readOne(e, GEARBOX, GEARBOX_MODE_ID, quick == true)?.firstOrNull()?.let { mode = it }
+                            readOne(e, GEARBOX, GEARBOX_OIL_ID, quick == true)?.firstOrNull()
                         }
                         if (oilByte != null) {
                             val celsius = oilByte - 40
@@ -577,11 +579,7 @@ object ObdHub {
                     // and, at the same pace, the engine for its oil temperature
                     if (answering && now - oilAsked >= OIL_PERIOD_MS) {
                         oilAsked = now
-                        val answer = lock.withLock {
-                            ensureHeader(e, ENGINE, log = false)
-                            e.command("22%04X".format(ENGINE_OIL_ID), 1_500)
-                        }
-                        val celsius = engineOilCelsius(answer)
+                        val celsius = readOne(e, ENGINE, ENGINE_OIL_ID, quick == true)?.let { engineOilCelsiusOf(it) }
                         if (celsius != null) {
                             oilRead = SystemClock.elapsedRealtime()
                             heard()
@@ -618,11 +616,11 @@ object ObdHub {
     }
 
     /** The data bytes of one ID while live, or null if the unit did not answer in time or refused. */
-    private suspend fun readOne(e: Elm327, unit: String, id: Int): List<Int>? =
+    private suspend fun readOne(e: Elm327, unit: String, id: Int, quick: Boolean): List<Int>? =
         try {
             val reply = lock.withLock {
                 ensureHeader(e, unit, log = false)
-                e.command("22%04X".format(id), 1_500)
+                e.command("22%04X".format(id) + if (quick) "1" else "", 1_500)
             }
             parseUdsData(reply, id)
         } catch (ex: LinkLost) {
@@ -631,12 +629,15 @@ object ObdHub {
             null
         }
 
-    /** Several IDs in one request while live; null unless the answer holds exactly those. */
-    private suspend fun readGroup(e: Elm327, unit: String, ids: List<Int>, sizes: List<Int>): List<List<Int>>? =
+    /**
+     * Several IDs in one request while live; null unless the answer holds exactly those.
+     * Only for answers that fit one CAN frame, which is what [quick] counts on.
+     */
+    private suspend fun readGroup(e: Elm327, unit: String, ids: List<Int>, sizes: List<Int>, quick: Boolean): List<List<Int>>? =
         try {
             val reply = lock.withLock {
                 ensureHeader(e, unit, log = false)
-                e.command("22" + ids.joinToString("") { "%04X".format(it) }, 1_500)
+                e.command("22" + ids.joinToString("") { "%04X".format(it) } + if (quick) "1" else "", 1_500)
             }
             parseUdsGroup(reply, ids, sizes)
         } catch (ex: LinkLost) {
