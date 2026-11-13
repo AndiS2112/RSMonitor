@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -31,11 +32,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -105,6 +108,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Height of the log and of the scan results, which scroll inside the scrolling screen. */
+private val LIST_HEIGHT = 320.dp
+
 private fun bluetoothPermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
@@ -132,6 +138,9 @@ private fun ConsoleScreen() {
             .fillMaxSize()
             .background(Screen)
             .windowInsetsPadding(WindowInsets.safeDrawing)
+            // The whole screen scrolls: the panels are taller than a phone, more so with the
+            // keyboard up. The lists inside therefore have a height of their own.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -166,11 +175,11 @@ private fun ConsoleScreen() {
             }
 
             link == ObdHub.Link.Disconnected -> {
-                AdapterPicker(Modifier.weight(1f))
+                AdapterPicker(Modifier.heightIn(max = 420.dp))
                 if (log.isNotEmpty()) LogView(log, Modifier.heightIn(max = 160.dp))
             }
 
-            link == ObdHub.Link.Connecting -> LogView(log, Modifier.weight(1f))
+            link == ObdHub.Link.Connecting -> LogView(log, Modifier.height(LIST_HEIGHT))
 
             else -> ConsoleControls(log)
         }
@@ -407,7 +416,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
         return
     }
 
-    LogView(log, Modifier.weight(1f))
+    LogView(log, Modifier.height(LIST_HEIGHT))
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         val send = {
@@ -518,7 +527,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ScanPanel(unit: Strin
     }
 
     LazyColumn(
-        modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LogPanel),
+        modifier = Modifier.height(LIST_HEIGHT).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LogPanel),
         contentPadding = PaddingValues(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
