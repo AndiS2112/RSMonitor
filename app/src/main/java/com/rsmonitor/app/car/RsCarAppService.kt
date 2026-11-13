@@ -58,7 +58,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         Drive.acquire(carContext)
 
         lifecycleScope.launch {
-            // About 20 times a second: gather the latest readings and repaint if anything
+            // About 30 times a second: gather the latest readings and repaint if anything
             // changed. This also keeps the upshift flash going.
             while (isActive) {
                 renderer.show(currentFrame())
@@ -114,7 +114,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     override fun onGetTemplate(): Template = gaugeTemplate(carContext) { CarScreen.switchCentre() }
 
     private companion object {
-        const val FRAME_MS = 50L
+        const val FRAME_MS = 33L
     }
 }
 

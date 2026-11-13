@@ -252,13 +252,15 @@ python3 tools/render_preview.py design design/preview
 
 | Light | Colour | Comes on at |
 |---|---|---|
-| 1 | Green | 3,500 rpm |
-| 2 | Yellow | 4,000 rpm |
-| 3 | Yellow | 5,000 rpm |
-| 4 | Yellow | 6,000 rpm |
-| 5 | Red | 7,500 rpm |
+| 1 | Green | 3,300 rpm |
+| 2 | Yellow | 3,800 rpm |
+| 3 | Yellow | 4,800 rpm |
+| 4 | Yellow | 5,800 rpm |
+| 5 | Red | 7,300 rpm |
 
-- From 8,000 rpm all five flash red: upshift.
+- From 7,800 rpm all five flash red: upshift.
+- Every step sits 200 rpm below its round figure (3,500, 4,000, 5,000, 6,000, 7,500, 8,000),
+  to allow for the time a reading takes to reach the car screen.
 - These are the steps in the app. The first design files under `design/` still use the
   earlier steps (4,000 to 8,000 rpm, flashing from 8,200).
 - Lights stay on once passed, so they fill from left to right. Unlit lights show as dark sockets.
@@ -329,8 +331,10 @@ Auto showing live RPM.
   must be switched on to be seen.
 - **The adapter can reach both control units.** Tested in the car: the engine unit answers
   `0105` from `7E8`, and with the gearbox selected a `22 F1 90` request is answered from `7E9`.
-- **Engine speed updates about 13 times a second** on this adapter, with only engine speed
-  being polled.
+- **How fast engine speed updates on this adapter:** 17 to 20 readings a second on the
+  G-meter page and about 10 on the power page with torque read every time, measured on the
+  car with everything coming from the gearbox. Before that, with engine speed asked from
+  the engine alone, it was about 13.
 - **Gearbox oil temperature is data ID `2104` on the gearbox control unit:** send `22 21 04`
   to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40.
   Confirmed on the car: 19 °C after standing for days with 18 °C outside (`62 21 04 3B`),
@@ -394,7 +398,7 @@ Auto showing live RPM.
    They have to be found on the car and checked against the dash display and VCDS.
 3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
    only matters for which entry to pick in the adapter list.
-4. **Whether three pulses a second reads well on the car screen**, which repaints about 20
+4. **Whether three pulses a second reads well on the car screen**, which repaints about 30
    times a second.
 5. **Whether the motion sensor keeps reporting with the phone's screen off** while Android
    Auto is running. Not yet checked in the car.
