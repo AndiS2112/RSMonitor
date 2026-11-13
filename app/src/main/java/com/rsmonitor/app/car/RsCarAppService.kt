@@ -3,7 +3,6 @@ package com.rsmonitor.app.car
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
-import android.graphics.RectF
 import android.os.SystemClock
 import android.view.Surface
 import androidx.car.app.AppManager
@@ -15,12 +14,15 @@ import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
 import androidx.car.app.validation.HostValidator
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.rsmonitor.app.R
 import com.rsmonitor.app.drive.Drive
 import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.obd.ObdHub
@@ -44,12 +46,9 @@ class RsCarAppService : CarAppService() {
  */
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val renderer = GaugeRenderer()
-    private val settings = carContext.getSharedPreferences("gauges", Context.MODE_PRIVATE)
-
-    /** Which page the centre dial shows; remembered between drives. */
-    private var centre = if (settings.getString(CENTRE_KEY, null) == Centre.Power.name) Centre.Power else Centre.GMeter
 
     init {
+        CarScreen.load(carContext)
         lifecycle.addObserver(this)
     }
 
@@ -65,10 +64,6 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
                 renderer.show(currentFrame())
                 delay(FRAME_MS)
             }
-        }
-        lifecycleScope.launch {
-            // the button's label follows the live state
-            ObdHub.live.collect { invalidate() }
         }
     }
 
@@ -106,7 +101,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             peakBrake = drive.peakBrake,
             peakLeft = drive.peakLeft,
             trace = drive.trace,
-            centre = centre,
+            centre = CarScreen.centre.value,
             power = ObdHub.power.value,
             torque = ObdHub.torque.value,
             powerPeak = drive.powerPeak,
@@ -116,38 +111,26 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         )
     }
 
-    override fun onGetTemplate(): Template = gaugeTemplate(
-        live = ObdHub.live.value,
-        centre = centre,
-        onToggleLive = { ObdHub.setLive(!ObdHub.live.value) },
-        onSwitchCentre = {
-            centre = if (centre == Centre.Power) Centre.GMeter else Centre.Power
-            settings.edit().putString(CENTRE_KEY, centre.name).apply()
-            invalidate()
-        },
-    )
+    override fun onGetTemplate(): Template = gaugeTemplate(carContext) { CarScreen.switchCentre() }
 
     private companion object {
         const val FRAME_MS = 50L
-        const val CENTRE_KEY = "centre"
     }
 }
 
 /**
- * The buttons Android Auto draws over the gauges: live data on or off, and which page the
- * centre dial shows. The second button is named after the page it switches to.
+ * The controls live on the phone. Android Auto does not allow this kind of screen without at
+ * least one button, so one small icon button stays: it switches the centre dial's page, the
+ * one control worth having within reach of the car screen. Android Auto shows it for a few
+ * seconds after the screen is touched and then puts it away.
  */
-fun gaugeTemplate(live: Boolean, centre: Centre, onToggleLive: () -> Unit, onSwitchCentre: () -> Unit): Template {
-    val liveButton = Action.Builder()
-        .setTitle(if (live) "Stop live" else "Start live")
-        .setOnClickListener { onToggleLive() }
-        .build()
-    val centreButton = Action.Builder()
-        .setTitle(if (centre == Centre.Power) "G-meter" else "Power")
+fun gaugeTemplate(context: Context, onSwitchCentre: () -> Unit): Template {
+    val switchPage = Action.Builder()
+        .setIcon(CarIcon.Builder(IconCompat.createWithResource(context, R.drawable.ic_switch_page)).build())
         .setOnClickListener { onSwitchCentre() }
         .build()
     return NavigationTemplate.Builder()
-        .setActionStrip(ActionStrip.Builder().addAction(centreButton).addAction(liveButton).build())
+        .setActionStrip(ActionStrip.Builder().addAction(switchPage).build())
         .build()
 }
 
@@ -192,9 +175,8 @@ class GaugeRenderer : SurfaceCallback {
             return
         }
         try {
-            val area = visibleArea?.takeIf { !it.isEmpty }?.let { RectF(it) }
-                ?: RectF(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat())
-            painter.paint(canvas, area, frame)
+            CarScreen.report(canvas.width, canvas.height, visibleArea)
+            painter.paint(canvas, gaugeArea(visibleArea, canvas.width, canvas.height), frame)
             painted = frame
         } finally {
             s.unlockCanvasAndPost(canvas)

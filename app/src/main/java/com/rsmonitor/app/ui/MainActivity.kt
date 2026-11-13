@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rsmonitor.app.car.CarScreen
+import com.rsmonitor.app.car.Centre
 import com.rsmonitor.app.drive.Drive
 import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.drive.PeakCallout
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        CarScreen.load(this)
         setContent { ConsoleScreen() }
     }
 
@@ -148,6 +151,7 @@ private fun ConsoleScreen() {
             }
         }
 
+        CarScreenPanel()
         GMeterPanel()
         PeakTempPanel()
 
@@ -170,6 +174,32 @@ private fun ConsoleScreen() {
 
             else -> ConsoleControls(log)
         }
+    }
+}
+
+/**
+ * Chooses which page the car screen's centre dial shows. Under it, once the car screen has
+ * been up, the screen area Android Auto reported: useful when the layout looks wrong there.
+ */
+@Composable
+private fun CarScreenPanel() {
+    val centre by CarScreen.centre.collectAsStateWithLifecycle()
+    val area by CarScreen.areaNote.collectAsStateWithLifecycle()
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel("CENTRE DIAL")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            for ((page, name) in listOf(Centre.GMeter to "G-meter", Centre.Power to "Power")) {
+                if (page == centre) {
+                    FilledButton(name, Modifier.weight(1f)) { CarScreen.show(page) }
+                } else {
+                    OutlineButton(name, Modifier.weight(1f)) { CarScreen.show(page) }
+                }
+            }
+        }
+        area?.let { Text("Car screen $it", color = Secondary, fontSize = 12.sp) }
     }
 }
 
@@ -591,9 +621,9 @@ private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun FilledButton(text: String, onClick: () -> Unit) {
+private fun FilledButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier
+        modifier
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Ink)

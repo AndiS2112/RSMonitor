@@ -45,6 +45,8 @@ published on the `previews` branch.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
 - Peak engine-oil and gearbox-oil temperature: an amber hand on each scale, and the exact
   figures called up on the car screen from the phone.
+- The controls are on the phone: live data on/off, centre dial page, G-meter calibration,
+  Peak Temp. The car screen keeps one icon button, which Android Auto requires.
 - Power and torque page for the centre dial (built; whether this engine offers the torque
   reading it needs is not yet checked in the car).
 
@@ -89,8 +91,8 @@ built, but nothing shows in the car yet: the gearbox's data ID for it has not be
 
 **Power and torque**
 
-A button on the car screen switches the centre dial between the G-meter and power and
-torque; the button is named after the page it leads to, and the choice is remembered.
+The centre dial's page, G-meter or power and torque, is chosen on the phone (**Centre
+dial**), and the choice is remembered. The car screen's one icon button switches it too.
 
 - Two rings in one dial, each with a 270° scale open at the bottom: power on the outer ring
   (0–480 HP), torque on the inner ring (0–450 Nm). The car makes 450 PS at 8,250 rpm and
@@ -359,9 +361,13 @@ Auto showing live RPM.
    measuring values in VCDS, so that is where it is being looked for.
 8. **The gear.** Its data ID on the gearbox is not known yet. Two scans of the gearbox, one
    in P and one in D with the brake held, should show it as one of the few values that differ.
-9. **Planned, once the data IDs are confirmed:** move the two car-screen buttons (live data
-   on/off, and the G-meter/power switch) to the phone screen, leaving no buttons on the car
-   screen.
+9. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
+   phone. Android Auto does not allow this kind of screen with no button at all, so one icon
+   button (switch page) remains; it should show only for about ten seconds after the screen
+   is touched. Android Auto also holds a strip at the top of the screen back for buttons;
+   the gauges now paint over it. To check in the car: that the gauges fill the height, and
+   that the button does go away. The phone's Centre dial panel shows the screen area
+   Android Auto reports.
 5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
    time, so the lights may need to come on earlier than the figures above. This has to be
