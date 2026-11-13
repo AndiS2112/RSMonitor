@@ -2,6 +2,7 @@ package com.rsmonitor.app.car
 
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.CornerPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -92,6 +93,7 @@ class GaugePainter {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private val rect = RectF()
+    private val barCorners = CornerPathEffect(2.5f)
 
     private val plain = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
     private val bold = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -161,24 +163,35 @@ class GaugePainter {
         val rpm = f.rpm
         val colours = if (rpm != null) ShiftLights.colours(rpm) else List(ShiftLights.ON_AT.size) { null }
         val dark = rpm != null && ShiftLights.isFlashing(rpm) && !f.flashOn
-        val r = 11f
-        val pitch = 36f
-        var x = CENTRE_X - pitch * (colours.size - 1) / 2f
+        // five bars leaning to the right, together as wide as LIGHTS_HALF_WIDTH on each side
+        val top = LIGHTS_Y - BAR_H / 2f
+        val bottom = LIGHTS_Y + BAR_H / 2f
+        var left = CENTRE_X - (colours.size * BAR_W + (colours.size - 1) * BAR_GAP) / 2f
+        fill.shader = null
+        fill.pathEffect = barCorners
         for (colour in colours) {
-            fill.shader = null
+            path.rewind()
+            path.moveTo(left + BAR_LEAN, top)
+            path.lineTo(left + BAR_W + BAR_LEAN, top)
+            path.lineTo(left + BAR_W - BAR_LEAN, bottom)
+            path.lineTo(left - BAR_LEAN, bottom)
+            path.close()
             if (colour != null && !dark) {
                 fill.color = colour
                 fill.setShadowLayer(8f, 0f, 0f, colour)
-                c.drawCircle(x, LIGHTS_Y, r, fill)
+                c.drawPath(path, fill)
                 fill.clearShadowLayer()
             } else {
                 fill.color = SOCKET
-                c.drawCircle(x, LIGHTS_Y, r, fill)
+                c.drawPath(path, fill)
                 stroke(LINE, 1f)
-                c.drawCircle(x, LIGHTS_Y, r - 0.5f, line)
+                line.pathEffect = barCorners
+                c.drawPath(path, line)
+                line.pathEffect = null
             }
-            x += pitch
+            left += BAR_W + BAR_GAP
         }
+        fill.pathEffect = null
     }
 
     // ---- oil gauges ---------------------------------------------------------------
@@ -740,6 +753,11 @@ class GaugePainter {
         private const val DIAL_SCALE = 1.22f
         /** From the middle of the row of five lights to its outer edge. */
         private const val LIGHTS_HALF_WIDTH = 83f
+        // each shift light is a bar leaning 24° to the right
+        private const val BAR_W = 29f
+        private const val BAR_H = 18f
+        private const val BAR_GAP = 5f
+        private const val BAR_LEAN = BAR_H / 2f * 0.445f
 
         // gauges
         private const val SIDE_R = 116f

@@ -54,7 +54,7 @@ published on the `previews` branch.
   the screen area (844 × 442 units for the 1156 × 606 px the head unit gives the app), and
   the dials are drawn 22% larger than their first size.
 - No title. The top row holds LIVE on the left, the five shift lights in the middle and the
-  adapter status on the right.
+  adapter status on the right. The shift lights are bars leaning to the right, side by side.
 - Oil gauges are tucked behind the centre dial. The icon sits below the hub, on the centre
   dial's side of the lowest numeral.
 - **No text notices.** Each oil's icon carries its state instead: grey at operating
