@@ -150,6 +150,20 @@ object ObdHub {
     /** Progress and results of the data-ID scan. */
     val scan: StateFlow<ScanState> = _scan
 
+    /** Progress of a drive recording; the rows themselves are fetched with [recordingReport]. */
+    data class RecordState(
+        val running: Boolean = false,
+        val rows: Int = 0,
+        val seconds: Int = 0,
+        /** True when the gearbox answers several IDs in one request, which makes the rows come faster. */
+        val batched: Boolean = false,
+    )
+
+    private var recorder: Job? = null
+    private val recordedRows = ArrayList<String>()
+    private val _record = MutableStateFlow(RecordState())
+    val record: StateFlow<RecordState> = _record
+
     fun connect(context: Context, device: BluetoothDevice, lowEnergy: Boolean) {
         if (_link.value != Link.Disconnected) return
         _link.value = Link.Connecting
@@ -181,6 +195,8 @@ object ObdHub {
     fun disconnect() {
         scanner?.cancel()
         scanner = null
+        recorder?.cancel()
+        recorder = null
         poller?.cancel()
         poller = null
         transport?.close()
@@ -247,6 +263,7 @@ object ObdHub {
         val lo = minOf(from, to).coerceIn(0, 0xFFFF)
         val hi = maxOf(from, to).coerceIn(0, 0xFFFF)
         val unit = _unit.value
+        stopRecording()
         setLive(false)
         _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo, extendedSession = extendedSession)
         scanner = scope.launch {
@@ -281,10 +298,10 @@ object ObdHub {
     }
 
     /** One request to a unit during a scan. A timeout counts as "no answer"; a lost link is thrown. */
-    private suspend fun ask(e: Elm327, unit: String, request: String): List<String> =
+    private suspend fun ask(e: Elm327, unit: String, request: String, log: Boolean = true): List<String> =
         try {
             lock.withLock {
-                ensureHeader(e, unit)
+                ensureHeader(e, unit, log)
                 e.command(request, 1_200)
             }.also { if (isCarReply(it)) heard() }
         } catch (ex: LinkLost) {
@@ -310,8 +327,82 @@ object ObdHub {
         scanner = null
     }
 
+    /**
+     * Records what the gearbox reports while the car is driven: see [RecordPlan]. It only
+     * reads values. Live polling and any scan are switched off while it runs, so the car
+     * screen shows no engine speed during a recording.
+     */
+    fun startRecording() {
+        val e = elm ?: return
+        if (_record.value.running) return
+        stopScan()
+        setLive(false)
+        synchronized(recordedRows) { recordedRows.clear() }
+        _record.value = RecordState(running = true)
+        recorder = scope.launch {
+            suspend fun together(group: RecordPlan.Group): List<List<Int>>? =
+                parseUdsGroup(ask(e, GEARBOX, group.request, log = false), group.ids, group.sizes)
+            try {
+                var batched = RecordPlan.GROUPS.all { together(it) != null }
+                _record.value = _record.value.copy(batched = batched)
+                val start = SystemClock.elapsedRealtime()
+                var row = 0
+                var misses = 0
+                while (isActive && row < RecordPlan.MAX_ROWS) {
+                    val fast = ArrayList<List<Int>?>(RecordPlan.FAST.size)
+                    if (batched) {
+                        var missed = false
+                        for (group in RecordPlan.GROUPS) {
+                            val values = together(group)
+                            if (values != null) fast.addAll(values) else {
+                                missed = true
+                                group.ids.forEach { _ -> fast.add(null) }
+                            }
+                        }
+                        // if the combined answers stop coming, ask one by one from then on
+                        if (!missed) misses = 0 else if (++misses >= 5) batched = false
+                    } else {
+                        for (id in RecordPlan.FAST) fast.add(parseUdsData(ask(e, GEARBOX, "22%04X".format(id), log = false), id))
+                    }
+                    val extraId = RecordPlan.ROTATING[row % RecordPlan.ROTATING.size]
+                    val extra = parseUdsData(ask(e, GEARBOX, "22%04X".format(extraId), log = false), extraId)
+                    val engineRpm = if (row % RecordPlan.ENGINE_EVERY == 0) parseRpm(ask(e, ENGINE, "010C", log = false)) else null
+                    val millis = SystemClock.elapsedRealtime() - start
+                    synchronized(recordedRows) { recordedRows += recordRow(millis, fast, extraId, extra, engineRpm) }
+                    row++
+                    _record.value = RecordState(running = true, rows = row, seconds = (millis / 1000).toInt(), batched = batched)
+                }
+            } catch (ex: LinkLost) {
+                append("record", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
+            } finally {
+                _record.value = _record.value.copy(running = false)
+            }
+        }
+    }
+
+    fun stopRecording() {
+        recorder?.cancel()
+        recorder = null
+    }
+
+    /** The recording as text: a title line, the column names, then one row per line. */
+    fun recordingReport(): String {
+        val state = _record.value
+        val rows = synchronized(recordedRows) { recordedRows.toList() }
+        return buildString {
+            append("RS Monitor recording · gearbox (7E1) · ${rows.size} rows · ${state.seconds} s · ")
+            append(if (state.batched) "several values per request" else "one value per request")
+            append('\n')
+            append(RecordPlan.COLUMNS).append('\n')
+            for (row in rows) append(row).append('\n')
+        }
+    }
+
     /** Turns continuous engine-speed polling on or off. */
     fun setLive(on: Boolean) {
+        // live polling and a recording would only slow each other down
+        if (on) stopRecording()
         _live.value = on
         poller?.cancel()
         poller = null

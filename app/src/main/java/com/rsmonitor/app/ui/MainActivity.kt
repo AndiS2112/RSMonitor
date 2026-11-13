@@ -1,6 +1,7 @@
 package com.rsmonitor.app.ui
 
 import android.Manifest
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rsmonitor.app.car.CarScreen
 import com.rsmonitor.app.car.Centre
@@ -73,6 +75,7 @@ import com.rsmonitor.app.drive.PeakCallout
 import com.rsmonitor.app.obd.DeviceFinder
 import com.rsmonitor.app.obd.ObdHub
 import com.rsmonitor.app.obd.hexString
+import java.io.File
 import kotlinx.coroutines.delay
 
 // Palette from the design (see README).
@@ -347,7 +350,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     val gearTemp by ObdHub.gearTemp.collectAsStateWithLifecycle()
     val oilTemp by ObdHub.oilTemp.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
-    var findIds by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(Tab.Console) }
 
     // which control unit the console talks to
     Row(
@@ -401,17 +404,23 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
         Switch(checked = live, onCheckedChange = { ObdHub.setLive(it) })
     }
 
-    // console, or the search for data IDs
+    // console, the search for data IDs, or a drive recording
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Segment("Console", !findIds, Modifier.weight(1f)) { findIds = false }
-        Segment("Find IDs", findIds, Modifier.weight(1f)) { findIds = true }
+        Segment("Console", tab == Tab.Console, Modifier.weight(1f)) { tab = Tab.Console }
+        Segment("Find IDs", tab == Tab.FindIds, Modifier.weight(1f)) { tab = Tab.FindIds }
+        Segment("Record", tab == Tab.Record, Modifier.weight(1f)) { tab = Tab.Record }
     }
 
-    if (findIds) {
+    if (tab == Tab.FindIds) {
         ScanPanel(unit)
+        OutlineButton("Disconnect") { ObdHub.disconnect() }
+        return
+    }
+    if (tab == Tab.Record) {
+        RecordPanel()
         OutlineButton("Disconnect") { ObdHub.disconnect() }
         return
     }
@@ -451,6 +460,76 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     }
 
     OutlineButton("Disconnect") { ObdHub.disconnect() }
+}
+
+private enum class Tab { Console, FindIds, Record }
+
+/**
+ * Records what the gearbox reports during a drive, to be shared as a file afterwards: the
+ * way to find out which values follow the gear and the load without reading a phone on the
+ * move.
+ */
+@Composable
+private fun RecordPanel() {
+    val record by ObdHub.record.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // keep the phone awake while it records
+    val view = LocalView.current
+    DisposableEffect(record.running) {
+        view.keepScreenOn = record.running
+        onDispose { view.keepScreenOn = false }
+    }
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel("DRIVE RECORDING")
+        Text(
+            text = when {
+                record.running -> "Recording · ${record.rows} rows · ${clock(record.seconds)}" +
+                    if (record.batched) "" else " · one value at a time"
+                record.rows > 0 -> "Recorded ${record.rows} rows in ${clock(record.seconds)}."
+                else -> "Not recording."
+            },
+            color = Ink,
+            fontSize = 15.sp,
+        )
+        Text(
+            "Logs engine speed, torque, the selector and the gear candidates from the gearbox several times " +
+                "a second. It only reads values. Live data is off while it records, so the car screen shows no " +
+                "engine speed. Start it parked, drive, stop it parked, then share the file.",
+            color = Secondary,
+            fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilledButton(if (record.running) "Stop" else "Start recording", Modifier.weight(1f)) {
+                if (record.running) ObdHub.stopRecording() else ObdHub.startRecording()
+            }
+            if (!record.running && record.rows > 0) {
+                OutlineButton("Share file", Modifier.weight(1f)) { shareRecording(context) }
+            }
+        }
+    }
+}
+
+private fun clock(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
+
+/** Writes the recording to a file in the app's cache and offers it to the share sheet. */
+private fun shareRecording(context: Context) {
+    val folder = File(context.cacheDir, "recordings").apply { mkdirs() }
+    val file = File(folder, "rs-monitor-recording.txt")
+    file.writeText(ObdHub.recordingReport())
+    val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        // the receiving app is allowed to read this one file
+        clipData = ClipData.newRawUri("RS Monitor recording", uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, "Share recording"))
 }
 
 /** Tries a range of data IDs on the selected control unit and lists the ones that answer. */

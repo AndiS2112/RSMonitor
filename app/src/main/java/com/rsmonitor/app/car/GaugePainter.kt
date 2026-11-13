@@ -171,7 +171,7 @@ class GaugePainter {
         val rpm = f.rpm
         val colours = if (rpm != null) ShiftLights.colours(rpm) else List(ShiftLights.ON_AT.size) { null }
         val dark = rpm != null && ShiftLights.isFlashing(rpm) && !f.flashOn
-        // five bars leaning to the right, together as wide as LIGHTS_HALF_WIDTH on each side
+        // five bars leaning to the right, together as wide as the centre dial
         val top = LIGHTS_Y - BAR_H / 2f
         val bottom = LIGHTS_Y + BAR_H / 2f
         var left = CENTRE_X - (colours.size * BAR_W + (colours.size - 1) * BAR_GAP) / 2f
@@ -805,13 +805,15 @@ class GaugePainter {
         private const val LIGHTS_Y = 18f
         /** The three dials are drawn at their first size and enlarged together by this much. */
         private const val DIAL_SCALE = 1.22f
-        /** From the middle of the row of five lights to its outer edge. */
-        private const val LIGHTS_HALF_WIDTH = 83f
-        // each shift light is a bar leaning 24° to the right
-        private const val BAR_W = 29f
+        // Each shift light is a bar leaning 24° to the right. From tip to tip the row of five
+        // is as wide as the centre dial across its chrome rim: 2 × (G_R − 0.5) × DIAL_SCALE.
+        private const val LIGHTS_SPAN = 394f
         private const val BAR_H = 18f
-        private const val BAR_GAP = 5f
+        private const val BAR_GAP = 8f
         private const val BAR_LEAN = BAR_H / 2f * 0.445f
+        private const val BAR_W = (LIGHTS_SPAN - 2f * BAR_LEAN - 4f * BAR_GAP) / 5f
+        /** From the middle of the row of five lights to the end of its last bar, the lean aside. */
+        private const val LIGHTS_HALF_WIDTH = LIGHTS_SPAN / 2f - BAR_LEAN
 
         // gauges
         private const val SIDE_R = 116f

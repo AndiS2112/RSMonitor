@@ -131,12 +131,20 @@ fun isCarReply(lines: List<String>): Boolean = lines.any {
  * Handles a single CAN frame and a reply split over several frames.
  */
 fun parseUdsData(lines: List<String>, id: Int): List<Int>? {
+    val payload = udsPayload(lines) ?: return null
+    if (payload.size < 3 || payload[0] != 0x62) return null
+    if (payload[1] != ((id shr 8) and 0xFF) || payload[2] != (id and 0xFF)) return null
+    return payload.drop(3)
+}
+
+/** Everything a control unit sent in one reply, put back together from its CAN frames. */
+private fun udsPayload(lines: List<String>): List<Int>? {
     val frames = lines
         .map { it.replace(" ", "") }
         .filter { it.length >= 5 && (it.length - 3) % 2 == 0 && it.isHex() }
         .map { line -> line.substring(3).chunked(2).map { it.toInt(16) } }
     val first = frames.firstOrNull() ?: return null
-    val payload: List<Int> = when (first[0] shr 4) {
+    return when (first[0] shr 4) {
         0 -> first.drop(1).take(first[0] and 0x0F)
         1 -> {
             if (first.size < 2) return null
@@ -147,11 +155,28 @@ fun parseUdsData(lines: List<String>, id: Int): List<Int>? {
             }
             all.take(length)
         }
-        else -> return null
+        else -> null
     }
-    if (payload.size < 3 || payload[0] != 0x62) return null
-    if (payload[1] != ((id shr 8) and 0xFF) || payload[2] != (id and 0xFF)) return null
-    return payload.drop(3)
+}
+
+/**
+ * The values of several IDs asked for in one "22 …" request, in the order asked, or null
+ * unless the reply holds exactly those IDs, in that order, each with the number of bytes
+ * given in [sizes]. `62 21 02 0A 78 21 0C 03` read as 2102 (two bytes) and 210C (one byte)
+ * gives [[0A, 78], [03]].
+ */
+fun parseUdsGroup(lines: List<String>, ids: List<Int>, sizes: List<Int>): List<List<Int>>? {
+    val payload = udsPayload(lines) ?: return null
+    if (payload.firstOrNull() != 0x62) return null
+    val values = ArrayList<List<Int>>(ids.size)
+    var at = 1
+    for ((id, size) in ids.zip(sizes)) {
+        if (at + 2 + size > payload.size) return null
+        if (payload[at] != ((id shr 8) and 0xFF) || payload[at + 1] != (id and 0xFF)) return null
+        values += payload.subList(at + 2, at + 2 + size)
+        at += 2 + size
+    }
+    return if (at == payload.size) values else null
 }
 
 /**

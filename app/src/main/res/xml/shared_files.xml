@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files the app may hand to another app through the share sheet: drive recordings. -->
+<paths>
+    <cache-path name="recordings" path="recordings/" />
+</paths>

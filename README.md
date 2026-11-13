@@ -56,7 +56,8 @@ published on the `previews` branch.
   the screen area (844 × 442 units for the 1156 × 606 px the head unit gives the app), and
   the dials are drawn 22% larger than their first size.
 - No title. The top row holds LIVE on the left, the five shift lights in the middle and the
-  adapter status on the right. The shift lights are bars leaning to the right, side by side.
+  adapter status on the right. The shift lights are bars leaning to the right, side by side,
+  together as wide as the centre dial below them.
 - Oil gauges are tucked behind the centre dial. The icon sits below the hub, on the centre
   dial's side of the lowest numeral.
 - The icons: engine oil is an oil can with its spout and drip to the right; gearbox oil is
@@ -162,6 +163,17 @@ ones that answer, with the raw bytes and what they would mean as a temperature u
 formulas VW-group units most often use. It only reads values. To pin an ID down, scan once
 cold and once warm and look for the value that tracks the oil temperature on the dash (for
 the gearbox, against a VCDS reading).
+
+**Recording a drive**
+
+The "Record" tab logs what the gearbox reports while the car is driven, several rows a
+second: engine speed (`2102`), engine torque (`2002`), the selector (`210C`) and the two gear
+candidates (`210E`, `210F`) in every row, one further ID per row in turn, and the engine's
+own speed (`010C`) every tenth row as a check. It only reads values. Live data is off while
+it records. Start it parked, drive, stop it parked, and share the file.
+
+Each row is `t_ms,2102,2002,210C,210E,210F,extra,rpm_010C`, the values in hex as received,
+the extra as `2142=00D4`, the engine's speed in rpm.
 
 **On the car screen**
 
@@ -331,6 +343,32 @@ Auto showing live RPM.
   Other temperatures seen in the two scans but not identified: `1291` (16.5 °C cold, 103.5 °C
   warm), `129A` (104.2 °C warm), `1063` (105.7 °C warm), and `128A` (36 °C in the cold scan,
   100.5 °C warm), which looks like coolant.
+- **What the gearbox control unit (7E1) reports,** from scans of 2000–22FF in P, R and D
+  (brake held) on a warming engine, and VCDS readings taken alongside. All of these answer
+  without opening a diagnostic session.
+
+  | ID | Bytes | Meaning | How sure |
+  |---|---|---|---|
+  | `2002` | 2 | Engine torque as the gearbox receives it, in Nm. 4–5 in P, 14 in D, 19 in R. | Likely; to be proven on the road |
+  | `2102` | 2 | Engine speed in quarter-rpm (`0A 8C` = 675 with the rev counter at about 700). | Checked at idle only |
+  | `2104` | 1 | Oil temperature, byte − 40 °C. | Confirmed |
+  | `210C` | 1 | Selector: 0 P, 1 R, 2 N, 3 D. S also reads 3. | Confirmed |
+  | `210E` | 1 | 0 in P, 2 in R, 6 in D. Gear candidate. | Open |
+  | `210F` | 1 | 2 in P, 1 in R, 3 in D. Gear candidate. | Open |
+  | `2112`, `2113` | 1 | 1 in P, 0 in R and D. | Seen |
+  | `214E` | 1 | 1 in P, 5 in R and D. | Seen |
+  | `2142`, `2143` | 2 | Specified torque of clutch 1 and clutch 2, signed, 0.05 Nm per count; `D8 F0` (−500.00) means open. Clutch 1 carries D, clutch 2 carries R. | Matches VCDS |
+  | `214C`, `214D` | 2 | 17.1 in D (clutch 1) and 16.1 in R (clutch 2) at 0.05 per count; VCDS "Torque transmitting function" read 16.1 in D. | Likely |
+  | `2144`–`214B` | 2 | Eight values around 5000–8500 that move between P, R and D. Not identified. | Open |
+
+- **Two different "engine torques".** The engine control unit's own "Engine torque" in VCDS
+  read 70–80 Nm at a cold idle in P: what combustion produces before the engine's own
+  losses. The gearbox's "Engine torque-Data" read 11 Nm at the same moment (1 Nm warm) and
+  about 14 Nm more in D with the brake held: what reaches the clutch. The second is the
+  output figure, the kind Audi quotes, so it is the one for the power page. With the
+  ignition on and the engine off it reads 3181 Nm, a placeholder.
+- **The adapter sends at most seven bytes in a request,** so no more than three data IDs can
+  be asked for at once.
 - **How this engine stores temperatures:** one-byte values are raw × 0.75 − 48 °C; two-byte
   values are tenths of a kelvin.
 - **The engine does not offer the standard torque values.** `0163` is refused with
@@ -356,11 +394,11 @@ Auto showing live RPM.
    Auto is running. Not yet checked in the car.
 6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
    a second.
-7. **Engine torque.** The engine refuses the standard torque value (`0163`), so torque has
-   to come from one of the car's own data IDs. The gearbox lists engine torque among its
-   measuring values in VCDS, so that is where it is being looked for.
-8. **The gear.** Its data ID on the gearbox is not known yet. Two scans of the gearbox, one
-   in P and one in D with the brake held, should show it as one of the few values that differ.
+7. **Engine torque.** Gearbox ID `2002` is the candidate (see the table above). A drive
+   recording should show it rising with throttle to about 430 Nm, and how it reads on the
+   overrun. Then it gets wired into the power page.
+8. **The gear.** The selector is `210C`. The gear number is `210E` or `210F`; a drive
+   recording through the gears will show which, and where D and S differ.
 9. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
    phone. Android Auto does not allow this kind of screen with no button at all, so one icon
    button (switch page) remains; it should show only for about ten seconds after the screen

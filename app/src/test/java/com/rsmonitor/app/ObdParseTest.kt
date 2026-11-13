@@ -1,5 +1,6 @@
 package com.rsmonitor.app
 
+import com.rsmonitor.app.obd.RecordPlan
 import com.rsmonitor.app.obd.engineOilCelsius
 import com.rsmonitor.app.obd.gearboxOilCelsius
 import com.rsmonitor.app.obd.hexString
@@ -9,7 +10,9 @@ import com.rsmonitor.app.obd.isPositiveRead
 import com.rsmonitor.app.obd.parsePids
 import com.rsmonitor.app.obd.parseRpm
 import com.rsmonitor.app.obd.parseUdsData
+import com.rsmonitor.app.obd.parseUdsGroup
 import com.rsmonitor.app.obd.prettyReply
+import com.rsmonitor.app.obd.recordRow
 import com.rsmonitor.app.obd.referenceTorque
 import com.rsmonitor.app.obd.rpmOf
 import com.rsmonitor.app.obd.torquePercent
@@ -183,5 +186,54 @@ class ObdParseTest {
         assertFalse(isCarReply(listOf("UNABLE TO CONNECT")))
         assertFalse(isCarReply(listOf("OK")))
         assertFalse(isCarReply(emptyList()))
+    }
+
+    @Test
+    fun severalIdsFromOneAnswer() {
+        // engine speed, torque and the selector, as the gearbox answers "22 2102 2002 210C"
+        val reply = listOf(
+            "7E9 10 0C 62 21 02 0A 78 20",
+            "7E9 21 02 00 0E 21 0C 03 AA",
+        )
+        val ids = listOf(0x2102, 0x2002, 0x210C)
+        assertEquals(
+            listOf(listOf(0x0A, 0x78), listOf(0x00, 0x0E), listOf(0x03)),
+            parseUdsGroup(reply, ids, listOf(2, 2, 1)),
+        )
+        // two one-byte values fit in a single frame
+        assertEquals(
+            listOf(listOf(0x06), listOf(0x03)),
+            parseUdsGroup(listOf("7E9 07 62 21 0E 06 21 0F 03"), listOf(0x210E, 0x210F), listOf(1, 1)),
+        )
+    }
+
+    @Test
+    fun aGroupAnswerMustHoldExactlyWhatWasAsked() {
+        val ids = listOf(0x210E, 0x210F)
+        assertNull(parseUdsGroup(listOf("7E9 03 7F 22 31"), ids, listOf(1, 1)))            // refused
+        assertNull(parseUdsGroup(listOf("7E9 04 62 21 0E 06"), ids, listOf(1, 1)))        // only the first
+        assertNull(parseUdsGroup(listOf("7E9 07 62 21 0F 03 21 0E 06"), ids, listOf(1, 1))) // other order
+        assertNull(parseUdsGroup(listOf("7E9 07 62 21 0E 06 21 0F 03"), ids, listOf(2, 1))) // other sizes
+        assertNull(parseUdsGroup(listOf("NO DATA"), ids, listOf(1, 1)))
+    }
+
+    @Test
+    fun aRecordedRow() {
+        assertEquals(
+            "12340,0A78,000E,03,06,03,2142=00D4,665",
+            recordRow(12340, listOf(listOf(0x0A, 0x78), listOf(0x00, 0x0E), listOf(0x03), listOf(0x06), listOf(0x03)), 0x2142, listOf(0x00, 0xD4), 665),
+        )
+        // values that did not answer leave their place empty
+        assertEquals("500,,,,,,2105=,", recordRow(500, listOf(null, null, null, null, null), 0x2105, null, null))
+    }
+
+    @Test
+    fun theRecordingGroupsFitTheAdapter() {
+        // "22" and three IDs is seven bytes, the most the adapter sends in one request
+        assertEquals(RecordPlan.FAST, RecordPlan.GROUPS.flatMap { it.ids })
+        for (group in RecordPlan.GROUPS) {
+            assertTrue(group.request.length <= 14)
+            assertEquals(group.ids.size, group.sizes.size)
+        }
     }
 }
