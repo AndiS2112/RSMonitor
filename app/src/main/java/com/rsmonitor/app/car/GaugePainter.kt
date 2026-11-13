@@ -6,6 +6,8 @@ import android.graphics.CornerPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -94,6 +96,12 @@ class GaugePainter {
     private val path = Path()
     private val rect = RectF()
     private val barCorners = CornerPathEffect(2.5f)
+
+    /** Erases what is under it inside a layer: cuts the gap around an icon's thermometer. */
+    private val cut = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    }
 
     private val plain = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
     private val bold = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -296,14 +304,11 @@ class GaugePainter {
             value != null && value < coldBelow -> COLD
             else -> ICON
         }
-        if (inRedZone && pulse < 1f) {
-            // faded as a whole, so the places where its strokes overlap do not show through
-            c.saveLayerAlpha(iconLeft - 2f, iconTop - 2f, iconLeft + 34f, iconTop + 34f, (255 * pulse.coerceIn(0f, 1f)).toInt())
-        } else {
-            c.save()
-        }
+        // Drawn in a layer of its own: gaps can then be cut out of it around the thermometer,
+        // and in the red zone it fades as a whole, so overlapping strokes do not show through.
+        val alpha = if (inRedZone) (255 * pulse.coerceIn(0f, 1f)).toInt() else 255
+        c.saveLayerAlpha(iconLeft - 6f, iconTop - 4f, iconLeft + 40f, iconTop + 38f, alpha)
         c.translate(iconLeft, iconTop)
-        c.scale(32f / 36f, 32f / 36f)
         if (engineIcon) oilIcon(c) else gearboxIcon(c)
         c.restore()
 
@@ -394,41 +399,87 @@ class GaugePainter {
         fill.shader = null
     }
 
-    /** Oil can with a thermometer, in a 36-unit box. */
+    /**
+     * Oil can with a thermometer standing in it, drawn in a 32-unit box at the origin. The
+     * can's spout and drip point right, its handle is on the left. The thermometer's bulb sits
+     * in the can with a gap cut around it; the stem and three marks, facing right, stand above.
+     */
     private fun oilIcon(c: Canvas) {
+        c.save()
+        // a 31.2-unit window on the 36-unit drawing, a little larger than the gearbox icon
+        c.scale(32f / 31.2f, 32f / 31.2f)
+        c.translate(-2.4f, -0.4f)
+        // drawn spout-left, then mirrored
+        c.translate(36f, 0f)
+        c.scale(-1f, 1f)
+
         fill.shader = null
         fill.color = iconInk
-        path.rewind()
-        path.moveTo(9f, 20f); path.lineTo(21f, 20f); path.lineTo(29f, 15.5f); path.lineTo(31f, 17.5f)
-        path.lineTo(22.5f, 28f); path.lineTo(9f, 28f); path.close()
-        c.drawPath(path, fill)
-        stroke(iconInk, 2f, Paint.Cap.ROUND)
         line.strokeJoin = Paint.Join.ROUND
+        // can
         path.rewind()
-        path.moveTo(9f, 23.5f); path.lineTo(4.5f, 21.5f); path.lineTo(4.5f, 18.5f); path.lineTo(9f, 20.5f)
-        c.drawPath(path, line)
-        path.rewind()
-        path.moveTo(32.5f, 20.5f); path.rQuadTo(-1.8f, 2.8f, 0f, 3.9f); path.rQuadTo(1.8f, -1.1f, 0f, -3.9f); path.close()
+        path.moveTo(10.5f, 18.5f); path.lineTo(25f, 18.5f); path.lineTo(25f, 27.5f); path.lineTo(12.8f, 27.5f); path.close()
         c.drawPath(path, fill)
-        rect.set(13.2f, 4.5f, 17.2f, 21.5f)
-        c.drawRoundRect(rect, 2f, 2f, fill)
+        stroke(iconInk, 1.4f, Paint.Cap.ROUND)
+        c.drawPath(path, line)
+        // spout
+        path.rewind()
+        path.moveTo(11.2f, 19.2f); path.lineTo(3.6f, 15.2f); path.lineTo(2.7f, 17f); path.lineTo(11.6f, 22.6f); path.close()
+        c.drawPath(path, fill)
+        stroke(iconInk, 1.2f, Paint.Cap.ROUND)
+        c.drawPath(path, line)
+        // handle
+        stroke(iconInk, 2.4f, Paint.Cap.ROUND)
+        path.rewind()
+        path.moveTo(25f, 20.4f); path.lineTo(31.2f, 16.6f); path.lineTo(33.4f, 19.4f); path.lineTo(25f, 24.6f)
+        c.drawPath(path, line)
+        // the gap around the thermometer
+        c.drawCircle(17.6f, 19.4f, 4.8f, cut)
+        c.drawRect(14.5f, 4f, 20.7f, 19f, cut)
+        // drip
+        path.rewind()
+        path.moveTo(3.3f, 19.6f); path.rQuadTo(-1.8f, 2.8f, 0f, 3.9f); path.rQuadTo(1.8f, -1.1f, 0f, -3.9f); path.close()
+        c.drawPath(path, fill)
+        // thermometer, shrunk towards its bulb so that it stays seated in the can
+        c.scale(0.8f, 0.8f, 17.6f, 19.4f)
+        rect.set(16f, 3f, 19.2f, 18f)
+        c.drawRoundRect(rect, 1.6f, 1.6f, fill)
+        c.drawCircle(17.6f, 19.4f, 3.7f, fill)
         stroke(iconInk, 1.6f, Paint.Cap.ROUND)
-        for (y in floatArrayOf(7.5f, 11f, 14.5f)) c.drawLine(18.6f, y, 21.6f, y, line)
+        for (y in floatArrayOf(5.2f, 8.7f, 12.2f)) c.drawLine(10.6f, y, 13.6f, y, line)
+        c.restore()
     }
 
-    /** Gear with a thermometer inside and a small gear beside it, in a 36-unit box. */
+    /**
+     * A solid gear with a thermometer's bulb seated in its middle, a gap cut around it; the
+     * stem and three marks, facing right, stand above the gear, and a small gear sits in a
+     * notch at its right. Drawn in a 32-unit box at the origin.
+     */
     private fun gearboxIcon(c: Canvas) {
+        c.save()
+        c.scale(32f / 36f, 32f / 36f)
+        c.translate(-1.3f, -0.2f)
+
         fill.shader = null
         fill.color = iconInk
-        stroke(iconInk, 3f)
-        c.drawCircle(15f, 21f, 8.2f, line)
-        teeth(c, 15f, 21f, 9.4f, 12.8f, 3.6f, 22.5f)
-        stroke(iconInk, 2.2f, Paint.Cap.ROUND)
-        c.drawLine(15f, 14.5f, 15f, 20.5f, line)
-        c.drawCircle(15f, 22.6f, 2.7f, fill)
+        // large gear
+        c.drawCircle(14f, 23f, 8.8f, fill)
+        teeth(c, 14f, 23f, 8f, 11.6f, 3.8f, 22.5f)
+        // the gaps: around the bulb and stem, and the notch for the small gear
+        c.drawCircle(14f, 23f, 5.2f, cut)
+        c.drawRect(11.2f, 2f, 16.8f, 23f, cut)
+        c.drawCircle(30f, 15.5f, 7.7f, cut)
+        // thermometer
+        rect.set(12.7f, 1.8f, 15.3f, 22.3f)
+        c.drawRoundRect(rect, 1.3f, 1.3f, fill)
+        c.drawCircle(14f, 23f, 3.5f, fill)
+        stroke(iconInk, 1.4f, Paint.Cap.ROUND)
+        for (y in floatArrayOf(3.6f, 6.3f, 9f)) c.drawLine(17.2f, y, 19.8f, y, line)
+        // small gear
         stroke(iconInk, 2.2f)
-        c.drawCircle(28.5f, 8.5f, 3f, line)
-        teeth(c, 28.5f, 8.5f, 3.9f, 6.2f, 2.2f, 0f)
+        c.drawCircle(30f, 15.5f, 3f, line)
+        teeth(c, 30f, 15.5f, 3.9f, 6.2f, 2.2f, 0f)
+        c.restore()
     }
 
     private fun teeth(c: Canvas, cx: Float, cy: Float, r0: Float, r1: Float, width: Float, offsetDeg: Float) {
@@ -524,8 +575,11 @@ class GaugePainter {
                 x *= plot / len
                 y *= plot / len
             }
-            fill.color = INK
-            c.drawCircle(cx + x, cy + y, 11f, fill)
+            // see-through, so the peak outline shows under it, with a fine solid edge
+            fill.color = G_DOT
+            c.drawCircle(cx + x, cy + y, G_DOT_R, fill)
+            stroke(G_DOT_EDGE, 1.2f)
+            c.drawCircle(cx + x, cy + y, G_DOT_R, line)
         }
 
         // until the phone is calibrated there is no reading: say what is needed instead
@@ -772,6 +826,9 @@ class GaugePainter {
         private const val READOUT_W = 72f
         private const val G_R = 162f
         private const val G_SCALE = 60f   // design units per g
+        private const val G_DOT_R = 7.7f
+        private const val G_DOT = 0x73FFFFFF          // white at 45%
+        private val G_DOT_EDGE = 0xE6FFFFFF.toInt()   // white at 90%
 
         // Limits. Below "cold" the oil has not reached operating temperature; from "hot" it
         // is in the red zone. The gearbox runs cooler than the engine: 70 to 75 °C on the move.

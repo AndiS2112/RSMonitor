@@ -57,6 +57,12 @@ published on the `previews` branch.
   adapter status on the right. The shift lights are bars leaning to the right, side by side.
 - Oil gauges are tucked behind the centre dial. The icon sits below the hub, on the centre
   dial's side of the lowest numeral.
+- The icons: engine oil is an oil can with its spout and drip to the right; gearbox oil is
+  a solid gear with a small gear beside it. Each holds a thermometer: the bulb sits in the
+  can or the gear with a gap around it, and the stem and three marks, facing right, stand
+  above.
+- The G-meter's dot for the current reading is small (7.7 units in radius) and see-through
+  with a fine solid edge, so the peak outline shows under it.
 - **No text notices.** Each oil's icon carries its state instead: grey at operating
   temperature, blue below it, and red, pulsing three times a second, in the red zone. The
   temperature number under the gauge also turns red in the red zone.
