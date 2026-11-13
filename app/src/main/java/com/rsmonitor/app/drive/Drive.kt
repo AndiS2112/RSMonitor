@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -39,6 +40,22 @@ object Drive : SensorEventListener {
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state
+
+    private val callout = PeakCallout()
+    private val _peakTempsUntil = MutableStateFlow(PeakCallout.HIDDEN)
+
+    /**
+     * When the peak oil temperatures leave the car screen again, on the
+     * [SystemClock.elapsedRealtime] clock; [PeakCallout.HIDDEN] while they are not shown.
+     */
+    val peakTempsUntil: StateFlow<Long> = _peakTempsUntil
+
+    /** The phone's Peak Temp button: shows the peaks on the car screen, or puts them away. */
+    fun togglePeakTemps() {
+        _peakTempsUntil.value = callout.toggle(SystemClock.elapsedRealtime())
+    }
+
+    fun peakTempsShown(): Boolean = callout.isShown(SystemClock.elapsedRealtime())
 
     /** Starts listening to the accelerometer. Each caller must pair this with [release]. */
     @Synchronized

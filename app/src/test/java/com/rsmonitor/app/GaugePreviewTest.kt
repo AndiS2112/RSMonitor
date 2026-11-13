@@ -69,7 +69,7 @@ class GaugePreviewTest {
     @Test
     fun driving() = render(
         "2-driving",
-        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 88, oilPeak = 104, gearPeak = 88, gLat = 0.62f, gLon = -0.28f),
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f),
     )
 
     @Test
@@ -78,11 +78,21 @@ class GaugePreviewTest {
         driven.copy(rpm = 8300, oilTemp = 141, gearTemp = 126, oilPeak = 141, gearPeak = 126, gLat = -0.55f, gLon = 0.20f),
     )
 
-    /** After a hard run: the needles have dropped back, the amber hands stay at the peaks. */
+    /**
+     * The peaks called up from the phone after a hard run: the needles have dropped back, the
+     * amber hands stand at the peaks, and the rows under the gauges read PEAK TEMP.
+     */
     @Test
-    fun coolingDown() = render(
-        "4-cooling-down",
-        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 96, oilPeak = 138, gearPeak = 121, gLat = 0.05f, gLon = 0.03f),
+    fun peaksCalledUp() = render(
+        "4-peaks-called-up",
+        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 84, oilPeak = 138, gearPeak = 121, showPeaks = true, gLat = 0.05f, gLon = 0.03f),
+    )
+
+    /** Called up before the car has given any oil temperature: dashes, no hands. */
+    @Test
+    fun peaksCalledUpWithNothingToShow() = render(
+        "17-peaks-called-up-no-readings",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, showPeaks = true),
     )
 
     /** What the car shows today: engine speed only, G-meter waiting to be calibrated. */
@@ -100,26 +110,26 @@ class GaugePreviewTest {
 
     // ---- the centre dial switched to power and torque ----
 
-    private val powerPage = driven.copy(centre = Centre.Power, oilPeak = 118, gearPeak = 96)
+    private val powerPage = driven.copy(centre = Centre.Power, oilPeak = 118, gearPeak = 86)
 
     /** Full throttle at 5,000 rpm: peak torque. */
     @Test
     fun powerAtPeakTorque() = render(
         "8-power-peak-torque",
-        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 88, torque = 430, power = 306, torquePeak = 430, powerPeak = 306),
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 74, torque = 430, power = 306, torquePeak = 430, powerPeak = 306),
     )
 
     /** Full throttle at 8,250 rpm: peak power, shift lights flashing. */
     @Test
     fun powerAtPeakPower() = render(
         "9-power-peak-power",
-        powerPage.copy(rpm = 8250, oilTemp = 106, gearTemp = 90, torque = 383, power = 450, torquePeak = 430, powerPeak = 450),
+        powerPage.copy(rpm = 8250, oilTemp = 106, gearTemp = 76, torque = 383, power = 450, torquePeak = 430, powerPeak = 450),
     )
 
     @Test
     fun powerCruising() = render(
         "10-power-cruising",
-        powerPage.copy(rpm = 2400, oilTemp = 108, gearTemp = 92, torque = 112, power = 38, torquePeak = 430, powerPeak = 450),
+        powerPage.copy(rpm = 2400, oilTemp = 108, gearTemp = 78, torque = 112, power = 38, torquePeak = 430, powerPeak = 450),
     )
 
     // ---- with the gear shown beside the shift lights ----
@@ -127,13 +137,13 @@ class GaugePreviewTest {
     @Test
     fun gearDriving() = render(
         "12-gear-driving",
-        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 88, oilPeak = 118, gearPeak = 96, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4)),
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4)),
     )
 
     @Test
     fun gearOnThePowerPage() = render(
         "13-gear-power-page",
-        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 88, torque = 430, power = 306, torquePeak = 430, powerPeak = 306, gear = Gear('S', 3)),
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 74, torque = 430, power = 306, torquePeak = 430, powerPeak = 306, gear = Gear('S', 3)),
     )
 
     @Test
@@ -162,6 +172,6 @@ class GaugePreviewTest {
     @Test
     fun redZoneAtTheLowPointOfThePulse() = render(
         "16-red-zone-pulse-low",
-        driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 113, oilPeak = 134, gearPeak = 113, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
+        driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 118, oilPeak = 134, gearPeak = 118, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
     )
 }

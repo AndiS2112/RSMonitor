@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -63,9 +64,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rsmonitor.app.drive.Drive
 import com.rsmonitor.app.drive.GTracker
+import com.rsmonitor.app.drive.PeakCallout
 import com.rsmonitor.app.obd.DeviceFinder
 import com.rsmonitor.app.obd.ObdHub
 import com.rsmonitor.app.obd.hexString
+import kotlinx.coroutines.delay
 
 // Palette from the design (see README).
 private val Screen = Color(0xFF18181A)
@@ -146,6 +149,7 @@ private fun ConsoleScreen() {
         }
 
         GMeterPanel()
+        PeakTempPanel()
 
         when {
             !granted -> {
@@ -165,6 +169,46 @@ private fun ConsoleScreen() {
             link == ObdHub.Link.Connecting -> LogView(log, Modifier.weight(1f))
 
             else -> ConsoleControls(log)
+        }
+    }
+}
+
+/**
+ * Calls the peak oil temperatures up on the car screen, where they are otherwise hidden. They
+ * stay for ten seconds; tapping again puts them away sooner.
+ */
+@Composable
+private fun PeakTempPanel() {
+    val drive by Drive.state.collectAsStateWithLifecycle()
+    val until by Drive.peakTempsUntil.collectAsStateWithLifecycle()
+    var showing by remember { mutableStateOf(false) }
+    LaunchedEffect(until) {
+        val left = if (until == PeakCallout.HIDDEN) 0L else until - SystemClock.elapsedRealtime()
+        showing = left > 0
+        if (showing) {
+            delay(left)
+            showing = false
+        }
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel("PEAK OIL TEMPERATURE")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            FilledButton(if (showing) "Hide" else "Peak Temp") { Drive.togglePeakTemps() }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Engine ${drive.oilPeak?.let { "$it °C" } ?: "–"} · gearbox ${drive.gearPeak?.let { "$it °C" } ?: "–"}",
+                    color = Ink,
+                    fontSize = 15.sp,
+                )
+                Text(
+                    text = if (showing) "Showing on the car screen" else "Shows on the car screen for 10 seconds",
+                    color = Secondary,
+                    fontSize = 12.sp,
+                )
+            }
         }
     }
 }

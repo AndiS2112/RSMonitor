@@ -43,7 +43,7 @@ published on the `previews` branch.
 - Android Auto gauge screen, drawn from the design: the three gauges and the shift lights.
   The shift lights, the G-meter and both oil gauges have live data.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
-- Peak engine-oil and gearbox-oil temperature.
+- Peak engine-oil and gearbox-oil temperature, called up on the car screen from the phone.
 - Power and torque page for the centre dial (built; whether this engine offers the torque
   reading it needs is not yet checked in the car).
 
@@ -59,14 +59,19 @@ published on the `previews` branch.
 - **No text notices.** Each oil's icon carries its state instead: grey at operating
   temperature, blue below it, and red, pulsing three times a second, in the red zone. The
   temperature number under the gauge also turns red in the red zone.
+- Each oil scale covers 160°: the lowest numeral is 10° short of straight down, the middle
+  numeral is level with the hub, and the highest is 10° short of straight up.
+- There is a mark every 5 °C: a bar at each numeral, a large dot at the other tens and a
+  small dot at the fives.
 - Engine oil: scale 50 – 100 – 150 °C, blue below 80 °C, red zone from 130 °C.
-- Gearbox oil: scale 30 – 90 – 120 °C, blue below 45 °C, red zone from 110 °C. The middle
-  numeral always sits level with the hub, so each half of a scale has its own spacing.
+- Gearbox oil: scale 30 – 80 – 130 °C, blue below 50 °C, red zone from 115 °C.
 - Whether the adapter is connected and live data is on shows only in the top corners
   ("OBD off", "PAUSED").
-- Peak oil temperature: a thin amber hand on the scale at the highest temperature reached,
-  and a small amber "PEAK" number above the hub on the G-meter side. The peak is never shown
-  below the current reading.
+- Peak oil temperature is hidden until it is asked for. The **Peak Temp** button on the
+  phone calls it up for ten seconds (tapping again puts it away sooner): the row under each
+  gauge then reads "PEAK TEMP" with the peak in amber in place of the current reading, and a
+  thin amber hand marks the peak on the scale. The peak is never shown below the current
+  reading.
 - Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
 
 **Gear**
@@ -309,8 +314,8 @@ Auto showing live RPM.
   and 20 °C at the next cold start. The app asks for it every three seconds while live.
 - **How the gearbox oil behaves:** it warms far more slowly than the engine (62 °C after
   20 minutes, with the engine oil at 98 °C). Warm, it sits at 70 to 75 °C on the move and
-  climbs to about 85 °C standing still. Its gauge and limits are set for that: 45 °C counts
-  as operating temperature and the red zone starts at 110 °C.
+  climbs to about 85 °C standing still. Its gauge and limits are set for that: 50 °C counts
+  as operating temperature and the red zone starts at 115 °C.
 - **Engine oil temperature is data ID `11BD` on the engine control unit:** send `22 11 BD`
   to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 − 273.15.
   Confirmed on the car: the gauge matches the oil temperature on the instrument cluster.

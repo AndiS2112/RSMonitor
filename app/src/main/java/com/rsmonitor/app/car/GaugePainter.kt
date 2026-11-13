@@ -44,6 +44,8 @@ data class GaugeFrame(
     /** Highest oil temperatures since the car was last switched off. */
     val oilPeak: Int? = null,
     val gearPeak: Int? = null,
+    /** True while the peaks have been called up from the phone; they are hidden otherwise. */
+    val showPeaks: Boolean = false,
     /** Where the G-meter's calibration stands; readings exist only once it is ready. */
     val gStage: GTracker.Stage = GTracker.Stage.Uncalibrated,
     /** Sideways force in g, positive to the right. */
@@ -75,9 +77,10 @@ data class GaugeFrame(
  * Draws the gauge screen from the design: engine oil left, the centre dial (G-meter, or power
  * and torque), gearbox oil right, the gear and shift lights in the top row. The three dials
  * run from edge to edge of the car screen. There is no text notice: each oil's icon is blue
- * below operating temperature and red, pulsing, in the red zone. All geometry is in the design's own units (a 736×442
- * box) and scaled to whatever area the car gives. Uses only android.graphics, so it can be
- * rendered to a bitmap in tests.
+ * below operating temperature and red, pulsing, in the red zone. The peak oil temperatures
+ * show only while they are called up from the phone. All geometry is in the design's own
+ * units (an 844×442 box) and scaled to whatever area the car gives. Uses only
+ * android.graphics, so it can be rendered to a bitmap in tests.
  */
 class GaugePainter {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -103,8 +106,8 @@ class GaugePainter {
         // the three dials are the original drawing, enlarged together about the centre dial
         c.save()
         c.scale(DIAL_SCALE, DIAL_SCALE, CENTRE_X, CENTRE_Y)
-        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_COLD, OIL_HOT, f.oilTemp, f.oilPeak, f.pulse, "ENGINE OIL", engineIcon = true)
-        sideGauge(c, RIGHT_X, 1, 30, 120, intArrayOf(30, 90, 120), GEAR_COLD, GEAR_HOT, f.gearTemp, f.gearPeak, f.pulse, "GEARBOX OIL", engineIcon = false)
+        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_COLD, OIL_HOT, f.oilTemp, f.oilPeak, f.showPeaks, f.pulse, "ENGINE OIL", engineIcon = true)
+        sideGauge(c, RIGHT_X, 1, 30, 130, intArrayOf(30, 80, 130), GEAR_COLD, GEAR_HOT, f.gearTemp, f.gearPeak, f.showPeaks, f.pulse, "GEARBOX OIL", engineIcon = false)
         if (f.centre == Centre.Power) powerMeter(c, f) else gMeter(c, f)
         c.restore()
 
@@ -176,21 +179,21 @@ class GaugePainter {
 
     // ---- oil gauges ---------------------------------------------------------------
 
-    /** Needle angle in degrees clockwise from straight up. 100 °C sits at the middle of the scale. */
-    /**
-     * Needle angle in degrees from straight up. The scale is in two halves that meet at [mid],
-     * the middle numeral, which always sits level with the hub.
-     */
     private var iconInk = ICON
 
+    /**
+     * Needle angle in degrees from straight up. The scale covers 160°, from almost straight
+     * down to almost straight up, in two halves that meet at [mid], the middle numeral, which
+     * sits level with the hub.
+     */
     private fun angle(v: Float, lo: Int, mid: Int, hi: Int, side: Int): Float {
-        val t = if (v <= mid) 150f - 60f * (v - lo) / (mid - lo) else 90f - 60f * (v - mid) / (hi - mid)
+        val t = if (v <= mid) 170f - 80f * (v - lo) / (mid - lo) else 90f - 80f * (v - mid) / (hi - mid)
         return side * t
     }
 
     private fun sideGauge(
         c: Canvas, cx: Float, side: Int, lo: Int, hi: Int, labels: IntArray, coldBelow: Int, hotFrom: Int,
-        value: Int?, peak: Int?, pulse: Float, label: String, engineIcon: Boolean,
+        value: Int?, peak: Int?, showPeak: Boolean, pulse: Float, label: String, engineIcon: Boolean,
     ) {
         val cy = CENTRE_Y
         val mid = labels[1]
@@ -215,7 +218,8 @@ class GaugePainter {
         stroke(LINE, 1f)
         c.drawCircle(cx, cy, BAND_R, line)
 
-        // scale: a bar at each labelled value, dots between, red from the hot zone
+        // scale: a mark every 5 °C. A bar at each numeral, a large dot at the other tens and a
+        // small dot at the fives; red from the hot zone.
         var v = lo
         while (v <= hi) {
             val a = angle(v.toFloat(), lo, mid, hi, side)
@@ -225,7 +229,7 @@ class GaugePainter {
                 c.drawLine(px(cx, SIDE_R - 14f, a), py(cy, SIDE_R - 14f, a), px(cx, SIDE_R - 28f, a), py(cy, SIDE_R - 28f, a), line)
             } else {
                 fill.color = colour
-                c.drawCircle(px(cx, SIDE_R - 20f, a), py(cy, SIDE_R - 20f, a), if ((v - lo) % 10 == 0) 2.645f else 1.725f, fill)
+                c.drawCircle(px(cx, SIDE_R - 20f, a), py(cy, SIDE_R - 20f, a), if (v % 10 == 0) 2.645f else 1.725f, fill)
             }
             v += 5
         }
@@ -246,9 +250,13 @@ class GaugePainter {
         c.drawCircle(cx, cy, 21.5f, fill)
         fill.shader = null
 
-        // highest temperature reached: a thin amber hand across the dot band, under the needle.
-        // It is never shown below the current reading.
-        val peakShown = if (peak != null && value != null) max(peak, value) else peak
+        // Highest temperature reached, shown only while it is called up from the phone: a thin
+        // amber hand across the dot band, under the needle. Never below the current reading.
+        val peakShown = when {
+            !showPeak -> null
+            peak != null && value != null -> max(peak, value)
+            else -> peak ?: value
+        }
         if (peakShown != null) {
             val a = angle(peakShown.coerceIn(lo, hi).toFloat(), lo, mid, hi, side)
             stroke(PEAK, 2.5f, Paint.Cap.ROUND)
@@ -265,10 +273,10 @@ class GaugePainter {
         fill.color = 0xFF000000.toInt()
         c.drawCircle(cx, cy, 2f, fill)
 
-        // icon below the hub, on the G-meter side of the lowest numeral. It carries the oil's
-        // state: blue below operating temperature, red and pulsing in the red zone.
-        val iconLeft = cx - side * 12f - 16f
-        val iconTop = cy + 56f - 16f
+        // icon below the hub, on the centre dial's side of the lowest numeral. It carries the
+        // oil's state: blue below operating temperature, red and pulsing in the red zone.
+        val iconLeft = cx - side * 27f - 16f
+        val iconTop = cy + 50f - 16f
         val inRedZone = value != null && value >= hotFrom
         iconInk = when {
             inRedZone -> HOT
@@ -286,36 +294,34 @@ class GaugePainter {
         if (engineIcon) oilIcon(c) else gearboxIcon(c)
         c.restore()
 
-        // the peak as a number, above the hub on the G-meter side
-        if (peakShown != null) {
-            val x = cx - side * 22f
-            style(bold, 9f, MUTED, Paint.Align.CENTER, 0.16f)
-            c.drawText("PEAK", x, cy - 58f, text)
-            style(numerals, 16f, PEAK, Paint.Align.CENTER)
-            c.drawText(peakShown.toString(), x, cy - 41f, text)
-        }
-
         c.restore()
 
-        // name and precise reading under the gauge; the reading keeps a fixed width
+        // Name and precise reading under the gauge; the reading keeps a fixed width. While the
+        // peak is called up it takes this place: "PEAK TEMP" and the peak, in amber.
+        val name = if (showPeak) "PEAK TEMP" else label
+        val number = if (showPeak) peakShown else value
+        val colour = when {
+            number == null -> MUTED
+            showPeak -> PEAK
+            number >= hotFrom -> HOT
+            else -> INK
+        }
         style(bold, 13f, LABEL, Paint.Align.LEFT, 0.16f)
-        val labelW = text.measureText(label)
+        val labelW = text.measureText(name)
         val rowLeft = cx - (labelW + 10f + READOUT_W) / 2f
         val baseline = cy + SIDE_R * SIDE_SCALE + 10f + 17f
-        val hot = value != null && value >= hotFrom
         if (side < 0) {
-            c.drawText(label, rowLeft, baseline, text)
-            readout(c, value, hot, rowLeft + labelW + 10f, baseline, alignRight = false)
+            c.drawText(name, rowLeft, baseline, text)
+            readout(c, number, colour, rowLeft + labelW + 10f, baseline, alignRight = false)
         } else {
-            readout(c, value, hot, rowLeft + READOUT_W, baseline, alignRight = true)
+            readout(c, number, colour, rowLeft + READOUT_W, baseline, alignRight = true)
             style(bold, 13f, LABEL, Paint.Align.LEFT, 0.16f)
-            c.drawText(label, rowLeft + READOUT_W + 10f, baseline, text)
+            c.drawText(name, rowLeft + READOUT_W + 10f, baseline, text)
         }
     }
 
-    private fun readout(c: Canvas, value: Int?, hot: Boolean, x: Float, baseline: Float, alignRight: Boolean) {
+    private fun readout(c: Canvas, value: Int?, colour: Int, x: Float, baseline: Float, alignRight: Boolean) {
         val number = value?.toString() ?: "–"
-        val colour = if (value == null) MUTED else if (hot) HOT else INK
         style(numerals, 21f, colour, Paint.Align.LEFT)
         val numberW = text.measureText(number)
         style(bold, 13f, colour, Paint.Align.LEFT)
@@ -752,8 +758,8 @@ class GaugePainter {
         // is in the red zone. The gearbox runs cooler than the engine: 70 to 75 °C on the move.
         const val OIL_COLD = 80
         const val OIL_HOT = 130
-        const val GEAR_COLD = 45
-        const val GEAR_HOT = 110
+        const val GEAR_COLD = 50
+        const val GEAR_HOT = 115
 
         // power and torque scales
         const val HP_TOP = 480

@@ -97,6 +97,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             gear = ObdHub.gear.value,
             oilPeak = drive.oilPeak,
             gearPeak = drive.gearPeak,
+            showPeaks = Drive.peakTempsShown(),
             gStage = drive.stage,
             gLat = if (ready) drive.lat else null,
             gLon = if (ready) drive.lon else null,
