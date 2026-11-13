@@ -197,6 +197,9 @@ private fun ConsoleScreen() {
 private fun CarScreenPanel() {
     val centre by CarScreen.centre.collectAsStateWithLifecycle()
     val area by CarScreen.areaNote.collectAsStateWithLifecycle()
+    val torqueEvery by CarScreen.torqueEvery.collectAsStateWithLifecycle()
+    val rate by ObdHub.rate.collectAsStateWithLifecycle()
+    val torqueRate by ObdHub.torqueRate.collectAsStateWithLifecycle()
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -211,6 +214,28 @@ private fun CarScreenPanel() {
                 }
             }
         }
+        // how the readings are shared between engine speed and torque on the power page
+        Text("On the Power page, read torque with every", color = Ink, fontSize = 15.sp)
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Screen).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (n in CarScreen.TORQUE_EVERY_CHOICES) {
+                val name = when (n) {
+                    1 -> "reading"
+                    2 -> "2nd"
+                    3 -> "3rd"
+                    else -> "${n}th"
+                }
+                Segment(name, n == torqueEvery, Modifier.weight(1f)) { CarScreen.setTorqueEvery(n) }
+            }
+        }
+        val now = if (rate > 0f) "Now: engine speed ${"%.0f".format(rate)}/s · torque ${"%.0f".format(torqueRate)}/s. " else ""
+        Text(
+            text = now + "Reading torque less often makes the shift lights quicker and the torque needle slower.",
+            color = Secondary,
+            fontSize = 12.sp,
+        )
         area?.let { Text("Car screen $it", color = Secondary, fontSize = 12.sp) }
     }
 }

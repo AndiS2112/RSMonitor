@@ -108,8 +108,11 @@ dial**), and the choice is remembered. The car screen's one icon button switches
 - Torque is the engine computer's own calculated figure, not a measurement, as the gearbox
   receives it (gearbox ID `2002`): what reaches the clutch, the kind of figure Audi quotes.
   The dials start at zero, so engine braking shows as none.
-- While this page shows, engine speed, torque and the gear are asked from the gearbox in one
-  request. On the G-meter page torque is not read, which keeps the shift lights faster.
+- While this page shows, torque is asked from the gearbox straight after engine speed. Each
+  torque reading costs one engine-speed reading, so the phone has a switch (**Centre dial**
+  panel) for how often torque is read: with every engine-speed reading, or every second,
+  third or fourth. It can be changed while driving, and the panel shows both rates. On the
+  G-meter page torque is not read at all.
 
 **G-meter**
 

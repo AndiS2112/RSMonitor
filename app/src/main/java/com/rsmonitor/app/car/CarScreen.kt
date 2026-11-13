@@ -17,12 +17,23 @@ import kotlin.math.min
  */
 object CarScreen {
     private const val CENTRE_KEY = "centre"
+    private const val TORQUE_EVERY_KEY = "torqueEvery"
+
+    /** The choices for how often torque is read: with every engine-speed reading, every second, … */
+    val TORQUE_EVERY_CHOICES = listOf(1, 2, 3, 4)
 
     private var settings: SharedPreferences? = null
     private val _centre = MutableStateFlow(Centre.GMeter)
     private val _areaNote = MutableStateFlow<String?>(null)
+    private val _torqueEvery = MutableStateFlow(1)
 
     val centre: StateFlow<Centre> = _centre
+
+    /**
+     * On the power page, torque is read with every this-many-th engine-speed reading. Set on
+     * the phone, also while driving, and remembered.
+     */
+    val torqueEvery: StateFlow<Int> = _torqueEvery
 
     /** For example "1180×630, clear 12,96 to 1168,618"; null until the car screen has been up. */
     val areaNote: StateFlow<String?> = _areaNote
@@ -35,6 +46,15 @@ object CarScreen {
         settings = stored
         _centre.value = if (stored.getString(CENTRE_KEY, null) == Centre.Power.name) Centre.Power else Centre.GMeter
         ObdHub.torqueWanted = _centre.value == Centre.Power
+        _torqueEvery.value = stored.getInt(TORQUE_EVERY_KEY, 1).takeIf { it in TORQUE_EVERY_CHOICES } ?: 1
+        ObdHub.torqueEvery = _torqueEvery.value
+    }
+
+    fun setTorqueEvery(n: Int) {
+        if (n !in TORQUE_EVERY_CHOICES) return
+        _torqueEvery.value = n
+        ObdHub.torqueEvery = n
+        settings?.edit()?.putInt(TORQUE_EVERY_KEY, n)?.apply()
     }
 
     fun show(page: Centre) {

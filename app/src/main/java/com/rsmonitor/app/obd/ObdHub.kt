@@ -59,6 +59,15 @@ object ObdHub {
     @Volatile
     var torqueWanted = false
 
+    /**
+     * How often torque is read while it is wanted: with every engine-speed reading (1), with
+     * every second one (2), and so on. Each torque reading costs one engine-speed reading, so
+     * a higher number makes the shift lights quicker and the torque needle slower. May be
+     * changed while live.
+     */
+    @Volatile
+    var torqueEvery = 1
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
     private var transport: Transport? = null
@@ -91,6 +100,10 @@ object ObdHub {
     private val _rate = MutableStateFlow(0f)
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
+
+    private val _torqueRate = MutableStateFlow(0f)
+    /** Torque readings per second while live and the centre dial shows power. */
+    val torqueRate: StateFlow<Float> = _torqueRate
 
     /** Whether torque has been read since live data was switched on. */
     enum class TorqueSource { Unknown, Available, Missing }
@@ -217,6 +230,7 @@ object ObdHub {
         adapterHeader = ""
         _rpm.value = null
         _rate.value = 0f
+        _torqueRate.value = 0f
         clearReadings()
         _adapter.value = ""
         _link.value = Link.Disconnected
@@ -420,6 +434,7 @@ object ObdHub {
         poller = null
         _rpm.value = null
         _rate.value = 0f
+        _torqueRate.value = 0f
         clearReadings()
         if (on && _link.value == Link.Ready) startPolling()
     }
@@ -455,6 +470,8 @@ object ObdHub {
         poller?.cancel()
         poller = scope.launch {
             var count = 0
+            var torqueCount = 0
+            var round = 0
             var windowStart = SystemClock.elapsedRealtime()
             var lastReading = windowStart
             var lastTorque = windowStart
@@ -493,7 +510,7 @@ object ObdHub {
                         speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick == true))
                         // Torque is a request of its own. Asked for together with engine speed
                         // the answer no longer fits one frame, and that took as long as two.
-                        if (torqueWanted && speed != null) {
+                        if (torqueWanted && speed != null && round++ % torqueEvery.coerceAtLeast(1) == 0) {
                             nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID, quick == true))
                         }
                         if (speed != null) {
@@ -525,6 +542,7 @@ object ObdHub {
                         heard()
                     }
                     if (nm != null) {
+                        torqueCount++
                         lastTorque = now
                         // the dials start at zero; engine braking shows as none
                         val shown = nm.coerceAtLeast(0)
@@ -608,7 +626,9 @@ object ObdHub {
                 if (now - oilRead > OIL_STALE_MS) _oilTemp.value = null
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
+                    _torqueRate.value = torqueCount * 1_000f / (now - windowStart)
                     count = 0
+                    torqueCount = 0
                     windowStart = now
                 }
             }
