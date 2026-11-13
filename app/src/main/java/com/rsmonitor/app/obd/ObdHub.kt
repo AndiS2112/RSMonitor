@@ -47,6 +47,22 @@ object ObdHub {
     private const val OIL_PERIOD_MS = 3_000L
     private const val OIL_STALE_MS = 10_000L
 
+    /** The gear and the selector are asked for twice a second; a gear older than this is not shown. */
+    private const val SELECTOR_PERIOD_MS = 500L
+    private const val SELECTOR_STALE_MS = 3_000L
+
+    /** After this many rounds without engine speed from the gearbox, the engine is asked instead. */
+    private const val GEARBOX_GIVE_UP = 5
+    private const val GEARBOX_RETRY_MS = 5_000L
+
+    /** Engine speed, engine torque and the gear, asked for together while the power page shows. */
+    private val FAST_IDS = listOf(GEARBOX_SPEED_ID, GEARBOX_TORQUE_ID, GEARBOX_GEAR_ID)
+    private val FAST_SIZES = listOf(2, 2, 1)
+
+    /** Set by the car screen: true while the centre dial shows power and torque. */
+    @Volatile
+    var torqueWanted = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
     private var transport: Transport? = null
@@ -80,14 +96,14 @@ object ObdHub {
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
 
-    /** Whether the engine answers the standard torque requests (PIDs 62 and 63). */
+    /** Whether torque has been read since live data was switched on. */
     enum class TorqueSource { Unknown, Available, Missing }
 
     private val _torqueSource = MutableStateFlow(TorqueSource.Unknown)
     val torqueSource: StateFlow<TorqueSource> = _torqueSource
 
     private val _torque = MutableStateFlow<Int?>(null)
-    /** Engine torque in Nm, as the engine computer works it out. Never below zero. */
+    /** Engine torque in Nm, as the gearbox receives it from the engine. Never below zero. */
     val torque: StateFlow<Int?> = _torque
 
     private val _power = MutableStateFlow<Int?>(null)
@@ -98,8 +114,8 @@ object ObdHub {
     /** Engine oil temperature in °C, asked from the engine control unit every few seconds while live. */
     val oilTemp: StateFlow<Int?> = _oilTemp
 
-    // Stays empty until the gearbox's data ID for the selector position and gear is known.
     private val _gear = MutableStateFlow<Gear?>(null)
+    /** The selector position and gear, asked from the gearbox twice a second while live. */
     val gear: StateFlow<Gear?> = _gear
 
     private val _gearTemp = MutableStateFlow<Int?>(null)
@@ -399,7 +415,7 @@ object ObdHub {
         }
     }
 
-    /** Turns continuous engine-speed polling on or off. */
+    /** Turns live data on or off. */
     fun setLive(on: Boolean) {
         // live polling and a recording would only slow each other down
         if (on) stopRecording()
@@ -416,20 +432,22 @@ object ObdHub {
         _torque.value = null
         _power.value = null
         _torqueSource.value = TorqueSource.Unknown
+        _gear.value = null
         _gearTemp.value = null
         _oilTemp.value = null
     }
 
     /**
-     * Reads engine speed as fast as the adapter allows, and torque with it when the engine
-     * offers it.
+     * Reads the car while live.
      *
-     * Torque comes from two standard values: the reference torque in Nm (PID 63, asked once)
-     * and the current torque as a percentage of it (PID 62). Once the engine has answered
-     * for engine speed, the reference is asked for; if it comes back, every request from
-     * then on asks for engine speed and the percentage together ("010C62"), so the shift
-     * lights lose no speed. If the engine will not answer the two together, they are asked
-     * in turn instead.
+     * Everything fast comes from the gearbox control unit, so the adapter does not have to be
+     * pointed back and forth: engine speed in every round and, while the centre dial shows
+     * power ([torqueWanted]), engine torque and the gear with it in the same answer. Twice a
+     * second the gear and the selector are asked for; every few seconds the gearbox's mode
+     * byte and oil temperature, and, from the engine control unit, the engine oil temperature.
+     *
+     * If the gearbox stops answering for engine speed, the engine is asked instead ("010C"),
+     * and the gearbox is tried again every few seconds.
      */
     private fun startPolling() {
         poller?.cancel()
@@ -438,72 +456,126 @@ object ObdHub {
             var windowStart = SystemClock.elapsedRealtime()
             var lastReading = windowStart
             var lastTorque = windowStart
-            var reference: Int? = null     // Nm
-            var together = true            // engine speed and torque in one request
-            var misses = 0                 // requests in a row that brought no torque
-            var turn = 0
+            var lastGear = 0L
+            var groups = true              // the gearbox answers several IDs in one request
+            var groupMisses = 0
+            var gearboxMisses = 0          // rounds in a row without engine speed from the gearbox
+            var gearboxRetryAt = 0L
+            var engaged: Int? = null
+            var selector: Int? = null
+            var mode: Int? = null
+            var selectorAsked = 0L
             var gearAsked = 0L
             var gearRead = 0L
             var oilAsked = 0L
             var oilRead = 0L
+
+            /** Several gearbox IDs in one request; null when that did not work, and for good after three failures. */
+            suspend fun group(e: Elm327, ids: List<Int>, sizes: List<Int>): List<List<Int>>? {
+                if (!groups) return null
+                val values = readGroup(e, GEARBOX, ids, sizes)
+                if (values != null) groupMisses = 0 else if (++groupMisses >= 3) groups = false
+                return values
+            }
+
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
-                val request = when {
-                    reference == null -> "010C"
-                    together -> "010C62"
-                    turn++ % 2 == 0 -> "010C"
-                    else -> "0162"
-                }
                 try {
-                    val reply = lock.withLock {
-                        ensureHeader(e, ENGINE, log = false)
-                        e.command(request, 1_500)
-                    }
-                    val pids = parsePids(reply)
-                    val now = SystemClock.elapsedRealtime()
+                    val started = SystemClock.elapsedRealtime()
+                    var speed: Int? = null
+                    var nm: Int? = null
+                    var gearSeen = false
 
-                    val speed = rpmOf(pids) ?: if (request == "0162") null else parseRpm(reply)
+                    if (gearboxMisses < GEARBOX_GIVE_UP || started >= gearboxRetryAt) {
+                        if (torqueWanted) {
+                            val values = group(e, FAST_IDS, FAST_SIZES)
+                            if (values != null) {
+                                speed = gearboxEngineSpeed(values[0])
+                                nm = gearboxEngineTorque(values[1])
+                                engaged = values[2][0]
+                                gearSeen = true
+                            } else {
+                                speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID))
+                                nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID))
+                            }
+                        } else {
+                            speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID))
+                        }
+                        if (speed != null) {
+                            gearboxMisses = 0
+                        } else if (++gearboxMisses >= GEARBOX_GIVE_UP) {
+                            gearboxRetryAt = SystemClock.elapsedRealtime() + GEARBOX_RETRY_MS
+                        }
+                    }
+                    if (speed == null && gearboxMisses >= GEARBOX_GIVE_UP) {
+                        val reply = lock.withLock {
+                            ensureHeader(e, ENGINE, log = false)
+                            e.command("010C", 1_500)
+                        }
+                        speed = parseRpm(reply)
+                    }
+
+                    val now = SystemClock.elapsedRealtime()
                     if (speed != null) {
                         _rpm.value = speed
                         count++
                         lastReading = now
                         heard()
                     }
-
-                    val percent = torquePercent(pids)
-                    val ref = reference
-                    if (percent != null && ref != null) {
-                        misses = 0
+                    if (nm != null) {
                         lastTorque = now
-                        heard()
-                        val nm = (ref * percent / 100).coerceAtLeast(0)
-                        _torque.value = nm
-                        val rpm = _rpm.value
+                        // the dials start at zero; engine braking shows as none
+                        val shown = nm.coerceAtLeast(0)
+                        _torque.value = shown
+                        _torqueSource.value = TorqueSource.Available
+                        val rpm = speed ?: _rpm.value
                         if (rpm != null) {
-                            val hp = metricHorsepower(nm, rpm)
+                            val hp = metricHorsepower(shown, rpm)
                             _power.value = hp
-                            Drive.onPower(hp, nm)
+                            Drive.onPower(hp, shown)
                         }
-                    } else if (ref != null && request != "010C" && together && ++misses >= 3) {
-                        // the engine will not give both in one answer: ask in turn from now on
-                        together = false
-                        append(request, "No torque in the combined answer. Asking for it separately.", failed = true)
+                    }
+                    val answering = now - lastReading < STALE_MS
+
+                    // twice a second: which gear, and where the selector is
+                    if (answering && now - selectorAsked >= SELECTOR_PERIOD_MS) {
+                        selectorAsked = now
+                        val pair = group(e, listOf(GEARBOX_GEAR_ID, GEARBOX_SELECTOR_ID), listOf(1, 1))
+                        if (pair != null) {
+                            engaged = pair[0][0]
+                            selector = pair[1][0]
+                            gearSeen = true
+                        } else {
+                            readOne(e, GEARBOX, GEARBOX_GEAR_ID)?.firstOrNull()?.let {
+                                engaged = it
+                                gearSeen = true
+                            }
+                            readOne(e, GEARBOX, GEARBOX_SELECTOR_ID)?.firstOrNull()?.let { selector = it }
+                        }
                     }
 
-                    // the engine is answering: find out once whether it offers torque
-                    if (speed != null && _torqueSource.value == TorqueSource.Unknown) {
-                        val answer = lock.withLock {
-                            ensureHeader(e, ENGINE, log = false)
-                            e.command("0163", 1_500)
+                    // every few seconds: the gearbox's mode byte and oil temperature
+                    if (answering && now - gearAsked >= GEAR_PERIOD_MS) {
+                        gearAsked = now
+                        val pair = group(e, listOf(GEARBOX_MODE_ID, GEARBOX_OIL_ID), listOf(1, 1))
+                        val oilByte = if (pair != null) {
+                            mode = pair[0][0]
+                            pair[1][0]
+                        } else {
+                            readOne(e, GEARBOX, GEARBOX_MODE_ID)?.firstOrNull()?.let { mode = it }
+                            readOne(e, GEARBOX, GEARBOX_OIL_ID)?.firstOrNull()
                         }
-                        append("0163", answer)
-                        reference = referenceTorque(parsePids(answer))?.takeIf { it > 0 }
-                        _torqueSource.value = if (reference != null) TorqueSource.Available else TorqueSource.Missing
-                        lastTorque = SystemClock.elapsedRealtime()
+                        if (oilByte != null) {
+                            val celsius = oilByte - 40
+                            gearRead = SystemClock.elapsedRealtime()
+                            heard()
+                            _gearTemp.value = celsius
+                            Drive.onGearboxTemperature(celsius)
+                        }
                     }
 
-                    // every few seconds, while the car is answering, ask the engine for its oil temperature
-                    if (now - oilAsked >= OIL_PERIOD_MS && now - lastReading < STALE_MS) {
+                    // and, at the same pace, the engine for its oil temperature
+                    if (answering && now - oilAsked >= OIL_PERIOD_MS) {
                         oilAsked = now
                         val answer = lock.withLock {
                             ensureHeader(e, ENGINE, log = false)
@@ -518,23 +590,9 @@ object ObdHub {
                         }
                     }
 
-                    // and, at the same pace, the gearbox for its own
-                    if (now - gearAsked >= GEAR_PERIOD_MS && now - lastReading < STALE_MS) {
-                        gearAsked = now
-                        val answer = lock.withLock {
-                            ensureHeader(e, GEARBOX, log = false)
-                            e.command("22%04X".format(GEARBOX_OIL_ID), 1_500)
-                        }
-                        val celsius = gearboxOilCelsius(answer)
-                        if (celsius != null) {
-                            gearRead = SystemClock.elapsedRealtime()
-                            heard()
-                            _gearTemp.value = celsius
-                            Drive.onGearboxTemperature(celsius)
-                        }
-                    }
+                    if (gearSeen) lastGear = SystemClock.elapsedRealtime()
                 } catch (ex: LinkLost) {
-                    append(request, ex.message ?: "Adapter disconnected", failed = true)
+                    append("live", ex.message ?: "Adapter disconnected", failed = true)
                     disconnect()
                     break
                 } catch (ex: IOException) {
@@ -547,6 +605,7 @@ object ObdHub {
                     _torque.value = null
                     _power.value = null
                 }
+                _gear.value = if (now - lastGear <= SELECTOR_STALE_MS) gearFrom(engaged, selector, mode) else null
                 if (now - gearRead > GEAR_STALE_MS) _gearTemp.value = null
                 if (now - oilRead > OIL_STALE_MS) _oilTemp.value = null
                 if (now - windowStart >= 1_000) {
@@ -557,6 +616,34 @@ object ObdHub {
             }
         }
     }
+
+    /** The data bytes of one ID while live, or null if the unit did not answer in time or refused. */
+    private suspend fun readOne(e: Elm327, unit: String, id: Int): List<Int>? =
+        try {
+            val reply = lock.withLock {
+                ensureHeader(e, unit, log = false)
+                e.command("22%04X".format(id), 1_500)
+            }
+            parseUdsData(reply, id)
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            null
+        }
+
+    /** Several IDs in one request while live; null unless the answer holds exactly those. */
+    private suspend fun readGroup(e: Elm327, unit: String, ids: List<Int>, sizes: List<Int>): List<List<Int>>? =
+        try {
+            val reply = lock.withLock {
+                ensureHeader(e, unit, log = false)
+                e.command("22" + ids.joinToString("") { "%04X".format(it) }, 1_500)
+            }
+            parseUdsGroup(reply, ids, sizes)
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            null
+        }
 
     /** Points the adapter at a control unit. Call only while holding [lock]. */
     private suspend fun ensureHeader(e: Elm327, header: String, log: Boolean = true) {

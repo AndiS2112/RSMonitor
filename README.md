@@ -47,8 +47,9 @@ published on the `previews` branch.
   figures called up on the car screen from the phone.
 - The controls are on the phone: live data on/off, centre dial page, G-meter calibration,
   Peak Temp. The car screen keeps one icon button, which Android Auto requires.
-- Power and torque page for the centre dial (built; whether this engine offers the torque
-  reading it needs is not yet checked in the car).
+- Power and torque page for the centre dial, with engine torque as the gearbox reports it.
+- The gear beside the shift lights: P, R, N, D or M (gears chosen by hand) and the gear
+  number.
 
 **Gauge screen layout in the app**
 
@@ -87,8 +88,9 @@ published on the `previews` branch.
 **Gear**
 
 The selector position and gear are drawn just left of the shift lights: a small mode letter
-and a large gear number ("D 4", "S 3"), or one large letter for P, R and N. The drawing is
-built, but nothing shows in the car yet: the gearbox's data ID for it has not been found.
+and a large gear number ("D 4", "M 3"), or one large letter for P, R and N. It comes from
+the gearbox twice a second while live. M means the gears are being chosen by hand; S shows
+as D, because the values found so far do not tell the two apart.
 
 **Power and torque**
 
@@ -103,14 +105,11 @@ dial**), and the choice is remembered. The car screen's one icon button switches
   and its peak sit in the open bottom of the power ring. Peaks are also marked in amber on
   each ring. They clear when the car is switched off.
 - HP is metric horsepower (PS): torque in Nm × rpm ÷ 7023.5.
-- Torque is the engine computer's own calculated figure, not a measurement. It is read from
-  two standard OBD values: the reference torque in Nm (PID 63, asked once) and the current
-  torque as a percentage of it (PID 62). Engine speed and the percentage are asked for in
-  one request (`010C62`) so the shift lights do not slow down; if the engine will not answer
-  both together, they are asked in turn.
-- If the engine does not offer these values, the dial shows dashes, and the phone screen
-  says so under "Live engine data". The fallback is Audi's own torque value,
-  which needs its data ID found like the oil temperatures.
+- Torque is the engine computer's own calculated figure, not a measurement, as the gearbox
+  receives it (gearbox ID `2002`): what reaches the clutch, the kind of figure Audi quotes.
+  The dials start at zero, so engine braking shows as none.
+- While this page shows, engine speed, torque and the gear are asked from the gearbox in one
+  request. On the G-meter page torque is not read, which keeps the shift lights faster.
 
 **G-meter**
 
@@ -349,12 +348,16 @@ Auto showing live RPM.
 
   | ID | Bytes | Meaning | How sure |
   |---|---|---|---|
-  | `2002` | 2 | Engine torque as the gearbox receives it, in Nm. 4–5 in P, 14 in D, 19 in R. | Likely; to be proven on the road |
-  | `2102` | 2 | Engine speed in quarter-rpm (`0A 8C` = 675 with the rev counter at about 700). | Checked at idle only |
+  | `2002` | 2 | Engine torque as the gearbox receives it, in Nm. 4–5 in P, 14 in D; 394 on full throttle at 6,100 rpm. Below zero it reads 3277 + torque: `0C 9B` is −50 Nm, and the 3181 with the engine stopped is −96 Nm. | Confirmed: equals the torque the clutch is asked to carry |
+  | `2102` | 2 | Engine speed in quarter-rpm. | Confirmed against `010C` up to 8,090 rpm |
   | `2104` | 1 | Oil temperature, byte − 40 °C. | Confirmed |
-  | `210C` | 1 | Selector: 0 P, 1 R, 2 N, 3 D. S also reads 3. | Confirmed |
-  | `210E` | 1 | 0 in P, 2 in R, 6 in D. Gear candidate. | Open |
-  | `210F` | 1 | 2 in P, 1 in R, 3 in D. Gear candidate. | Open |
+  | `210C` | 1 | Selector: 0 P, 1 R, 2 N, 3 D. S and manual also read 3. | Confirmed |
+  | `210E` | 1 | The selector again, doubled: 0, 2, 4, 6. | Confirmed |
+  | `210F` | 1 | The engaged gear: 1 reverse, 2 nothing engaged (P, N), 3 to 9 gears 1 to 7. | Confirmed on a drive through all seven |
+  | `210B` | 1 | `0B` in P, R, N, D and S; `03` while the gears are chosen by hand. | Seen on two drives |
+  | `2111` | 2 | 1 while the gears are chosen by hand, otherwise 0. | Seen on two drives |
+  | `2103` | 2 | Rises with road speed; engine speed ÷ this is steady in each gear (2.4 in second, 0.68 in seventh). | Likely output speed |
+  | `2105` | 2 | Follows the gear ratio: 161 in first, 97 in second, 26 in seventh. | Seen |
   | `2112`, `2113` | 1 | 1 in P, 0 in R and D. | Seen |
   | `214E` | 1 | 1 in P, 5 in R and D. | Seen |
   | `2142`, `2143` | 2 | Specified torque of clutch 1 and clutch 2, signed, 0.05 Nm per count; `D8 F0` (−500.00) means open. Clutch 1 carries D, clutch 2 carries R. | Matches VCDS |
@@ -394,12 +397,17 @@ Auto showing live RPM.
    Auto is running. Not yet checked in the car.
 6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
    a second.
-7. **Engine torque.** Gearbox ID `2002` is the candidate (see the table above). A drive
-   recording should show it rising with throttle to about 430 Nm, and how it reads on the
-   overrun. Then it gets wired into the power page.
-8. **The gear.** The selector is `210C`. The gear number is `210E` or `210F`; a drive
-   recording through the gears will show which, and where D and S differ.
-9. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
+7. **Engine torque reads below Audi's figures.** On one pull in second and third the peaks
+   were 394 Nm (6,100 rpm) and about 404 PS (351 Nm at 8,090 rpm), against 430 Nm and
+   450 PS. Whether that is the engine, the conditions, or throttle not fully open for long
+   enough is not known.
+8. **S cannot be told from D** with the values found so far, so S shows as D. Finding it
+   means scanning a wider range of gearbox IDs once in D and once in S.
+9. **How fast the screen updates** now that engine speed, torque and the gear all come from
+   the gearbox. In the recordings a single value took about 95 ms and three together about
+   185 ms, so the shift lights should get about 8 readings a second on the G-meter page and
+   about 4.5 on the power page. To be checked on the car (the rate shows top right).
+10. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
    phone. Android Auto does not allow this kind of screen with no button at all, so one icon
    button (switch page) remains; it should show only for about ten seconds after the screen
    is touched. Android Auto also holds a strip at the top of the screen back for buttons;

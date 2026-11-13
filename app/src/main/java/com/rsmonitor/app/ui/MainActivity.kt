@@ -346,7 +346,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
     val rate by ObdHub.rate.collectAsStateWithLifecycle()
     val torque by ObdHub.torque.collectAsStateWithLifecycle()
     val power by ObdHub.power.collectAsStateWithLifecycle()
-    val torqueSource by ObdHub.torqueSource.collectAsStateWithLifecycle()
     val gearTemp by ObdHub.gearTemp.collectAsStateWithLifecycle()
     val oilTemp by ObdHub.oilTemp.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
@@ -381,10 +380,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.ConsoleControls(log: 
             if (live && rpm != null) {
                 Text(
                     text = when {
-                        torqueSource == ObdHub.TorqueSource.Missing -> "Torque: the engine does not answer the standard request"
                         torque != null && power != null -> "Torque $torque Nm · power $power HP"
                         torque != null -> "Torque $torque Nm"
-                        else -> "Torque: asking the engine…"
+                        else -> "Torque: read while the centre dial shows Power"
                     },
                     color = Secondary,
                     fontSize = 13.sp,

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Rect
 import android.graphics.RectF
+import com.rsmonitor.app.obd.ObdHub
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.min
@@ -33,10 +34,13 @@ object CarScreen {
         val stored = context.applicationContext.getSharedPreferences("gauges", Context.MODE_PRIVATE)
         settings = stored
         _centre.value = if (stored.getString(CENTRE_KEY, null) == Centre.Power.name) Centre.Power else Centre.GMeter
+        ObdHub.torqueWanted = _centre.value == Centre.Power
     }
 
     fun show(page: Centre) {
         _centre.value = page
+        // torque is only read while its page shows; it costs engine-speed readings
+        ObdHub.torqueWanted = page == Centre.Power
         settings?.edit()?.putString(CENTRE_KEY, page.name)?.apply()
     }
 
