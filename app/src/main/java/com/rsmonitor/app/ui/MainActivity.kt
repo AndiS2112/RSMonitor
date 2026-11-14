@@ -351,10 +351,10 @@ private fun ShiftLightsPanel() {
 private fun OilLimitsPanel() {
     val limits by CarScreen.oilLimits.collectAsStateWithLifecycle()
     val rows = listOf(
-        Triple(OilLimits.Which.OilCold, "Engine oil cold below", ColdBlue),
-        Triple(OilLimits.Which.OilHot, "Engine oil hot from", HotRed),
-        Triple(OilLimits.Which.GearCold, "Gearbox oil cold below", ColdBlue),
-        Triple(OilLimits.Which.GearHot, "Gearbox oil hot from", HotRed),
+        Triple(OilLimits.Which.OilCold, "Engine cold below", ColdBlue),
+        Triple(OilLimits.Which.OilHot, "Engine hot from", HotRed),
+        Triple(OilLimits.Which.GearCold, "Gearbox cold below", ColdBlue),
+        Triple(OilLimits.Which.GearHot, "Gearbox hot from", HotRed),
     )
     PanelColumn("OIL TEMPERATURES", gap = 4.dp) {
         for ((which, name, colour) in rows) {
