@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'app/**'
+      - 'signing/**'
       - '*.gradle.kts'
       - 'gradle.properties'
       - '.github/workflows/build.yml'
