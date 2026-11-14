@@ -62,8 +62,8 @@ data class GaugeFrame(
     val peakRight: Float = 0f,
     val peakBrake: Float = 0f,
     val peakLeft: Float = 0f,
-    /** Peak g by direction, evenly spaced clockwise starting at "accelerating". */
-    val trace: List<Float> = emptyList(),
+    /** The dot's path over the last few seconds. */
+    val tail: GTailPoints = GTailPoints.NONE,
     val centre: Centre = Centre.GMeter,
     /** Engine power in metric horsepower and torque in Nm, with their peaks. */
     val power: Int? = null,
@@ -94,6 +94,7 @@ class GaugePainter {
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+    private var tailXy = FloatArray(0)
     private val rect = RectF()
     private val barCorners = CornerPathEffect(2.5f)
 
@@ -541,22 +542,35 @@ class GaugePainter {
         stroke(RING, 1.5f)
         for (g in floatArrayOf(1.5f, 1f, 0.5f)) c.drawCircle(cx, cy, G_SCALE * g, line)
 
-        // peak trace
-        if (f.trace.size >= 3) {
-            path.rewind()
-            for ((i, g) in f.trace.withIndex()) {
-                val a = i * 360f / f.trace.size
-                val r = g.coerceIn(0f, 1.5f) * G_SCALE
-                if (i == 0) path.moveTo(px(cx, r, a), py(cy, r, a)) else path.lineTo(px(cx, r, a), py(cy, r, a))
+        val lat = f.gLat
+        val lon = f.gLon
+
+        // The tail: the dot's path over the last few seconds, as wide as the dot where it
+        // leaves it, thinning and fading to nothing. It is drawn as layers, each reaching
+        // less far back than the one before, so it fades smoothly.
+        val tail = f.tail
+        if (lat != null && lon != null && tail.size >= 2) {
+            if (tailXy.size < tail.size * 2) tailXy = FloatArray(tail.size * 2)
+            for (i in 0 until tail.size) {
+                tailXy[i * 2] = cx + plotX(tail.lat(i), tail.lon(i), plot)
+                tailXy[i * 2 + 1] = cy + plotY(tail.lat(i), tail.lon(i), plot)
             }
-            path.close()
-            fill.color = HOT
-            fill.alpha = 82
-            c.drawPath(path, fill)
-            fill.alpha = 255
-            stroke(HOT, 2f)
+            stroke(PEAK, 1f, Paint.Cap.ROUND)
             line.strokeJoin = Paint.Join.ROUND
-            c.drawPath(path, line)
+            line.alpha = TAIL_LAYER_ALPHA
+            for (layer in 1..TAIL_LAYERS) {
+                val reach = GTail.SECONDS * layer / TAIL_LAYERS
+                line.strokeWidth = TAIL_END_W + (TAIL_HEAD_W - TAIL_END_W) * (1f - (layer - 1f) / (TAIL_LAYERS - 1f))
+                path.rewind()
+                path.moveTo(tailXy[0], tailXy[1])
+                var i = 1
+                while (i < tail.size && tail.age(i) <= reach) {
+                    path.lineTo(tailXy[i * 2], tailXy[i * 2 + 1])
+                    i++
+                }
+                if (i > 1) c.drawPath(path, line)
+            }
+            line.alpha = 255
         }
 
         // crosshair
@@ -564,22 +578,14 @@ class GaugePainter {
         c.drawLine(cx - plot, cy, cx + plot, cy, line)
         c.drawLine(cx, cy - plot, cx, cy + plot, line)
 
-        // current reading
-        val lat = f.gLat
-        val lon = f.gLon
+        // current reading: a solid dot in the tail's colour, with a fine lighter edge
         if (lat != null && lon != null) {
-            var x = lat * G_SCALE
-            var y = -lon * G_SCALE
-            val len = hypot(x, y)
-            if (len > plot) {
-                x *= plot / len
-                y *= plot / len
-            }
-            // see-through, so the peak outline shows under it, with a fine solid edge
-            fill.color = G_DOT
-            c.drawCircle(cx + x, cy + y, G_DOT_R, fill)
+            val x = cx + plotX(lat, lon, plot)
+            val y = cy + plotY(lat, lon, plot)
+            fill.color = PEAK
+            c.drawCircle(x, y, G_DOT_R, fill)
             stroke(G_DOT_EDGE, 1.2f)
-            c.drawCircle(cx + x, cy + y, G_DOT_R, line)
+            c.drawCircle(x, y, G_DOT_R, line)
         }
 
         // until the phone is calibrated there is no reading: say what is needed instead
@@ -779,6 +785,17 @@ class GaugePainter {
 
     private fun py(cy: Float, r: Float, deg: Float) = cy - r * cos(Math.toRadians(deg.toDouble())).toFloat()
 
+    /** Where a reading sits on the G plot, from its centre; readings beyond the outer ring are held on it. */
+    private fun plotX(lat: Float, lon: Float, plot: Float): Float {
+        val len = hypot(lat, lon) * G_SCALE
+        return lat * G_SCALE * (if (len > plot) plot / len else 1f)
+    }
+
+    private fun plotY(lat: Float, lon: Float, plot: Float): Float {
+        val len = hypot(lat, lon) * G_SCALE
+        return -lon * G_SCALE * (if (len > plot) plot / len else 1f)
+    }
+
     private fun stroke(colour: Int, width: Float, cap: Paint.Cap = Paint.Cap.BUTT) {
         line.shader = null
         line.color = colour
@@ -829,8 +846,11 @@ class GaugePainter {
         private const val G_R = 162f
         private const val G_SCALE = 60f   // design units per g
         private const val G_DOT_R = 7.7f
-        private const val G_DOT = 0x73FFFFFF          // white at 45%
-        private val G_DOT_EDGE = 0xE6FFFFFF.toInt()   // white at 90%
+        private val G_DOT_EDGE = 0xFFFFD591.toInt()   // a lighter amber
+        private const val TAIL_HEAD_W = 2f * G_DOT_R  // as wide as the dot where it leaves it
+        private const val TAIL_END_W = 3f
+        private const val TAIL_LAYERS = 14
+        private const val TAIL_LAYER_ALPHA = 41       // 16% a layer; all of them together are close to solid
 
         // Limits. Below "cold" the oil has not reached operating temperature; from "hot" it
         // is in the red zone. The gearbox runs cooler than the engine: 70 to 75 °C on the move.

@@ -46,6 +46,7 @@ class RsCarAppService : CarAppService() {
  */
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val renderer = GaugeRenderer()
+    private val tail = GTail()
 
     init {
         CarScreen.load(carContext)
@@ -75,6 +76,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         val drive = Drive.state.value
         val rpm = ObdHub.rpm.value
         val ready = drive.stage == GTracker.Stage.Ready
+        val now = SystemClock.elapsedRealtime()
+        if (ready) tail.add(now, drive.lat, drive.lon) else tail.clear()
         val oil = ObdHub.oilTemp.value
         val gearbox = ObdHub.gearTemp.value
         // outside the red zones the value never changes, so the screen is not repainted for it
@@ -100,7 +103,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             peakRight = drive.peakRight,
             peakBrake = drive.peakBrake,
             peakLeft = drive.peakLeft,
-            trace = drive.trace,
+            // only the G-meter draws it; left out elsewhere, the other page is not repainted for it
+            tail = if (CarScreen.centre.value == Centre.GMeter) tail.points(now) else GTailPoints.NONE,
             centre = CarScreen.centre.value,
             power = ObdHub.power.value,
             torque = ObdHub.torque.value,

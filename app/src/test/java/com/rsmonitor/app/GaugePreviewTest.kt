@@ -4,15 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.RectF
 import com.rsmonitor.app.car.Centre
+import com.rsmonitor.app.car.GTail
+import com.rsmonitor.app.car.GTailPoints
 import com.rsmonitor.app.car.GaugeFrame
 import com.rsmonitor.app.car.GaugePainter
 import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.drive.Gear
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,18 +40,20 @@ class GaugePreviewTest {
         assertNotEquals(bitmap.getPixel(2, 2), bitmap.getPixel(width / 2, height / 2 + 40))
     }
 
-    /** A plausible peak outline: an ellipse per quadrant. */
-    private fun trace(accel: Float, right: Float, brake: Float, left: Float): List<Float> = List(72) { i ->
-        val a = Math.toRadians(i * 5.0)
-        val sx = if (sin(a) >= 0) right else left
-        val sy = if (cos(a) >= 0) accel else brake
-        (1.0 / sqrt((sin(a) / sx) * (sin(a) / sx) + (cos(a) / sy) * (cos(a) / sy))).toFloat()
+    /** The dot's last three seconds: off the brakes and into a right-hand bend. */
+    private fun tail(): GTailPoints {
+        val t = GTail()
+        for (i in 0..90) {
+            val k = i / 90f
+            // from braking in a straight line (0, -0.8) round to where the dot is now (0.62, -0.28)
+            t.add(i * 33L, 0.62f * k * k, -0.8f + 0.52f * k)
+        }
+        return t.points(90 * 33L)
     }
 
     private val driven = GaugeFrame(
         connected = true, live = true, rate = 13f, gStage = GTracker.Stage.Ready,
         peakAccel = 0.36f, peakRight = 0.88f, peakBrake = 0.95f, peakLeft = 0.82f,
-        trace = trace(0.36f, 0.88f, 0.95f, 0.82f),
     )
 
     @Test
@@ -62,14 +63,13 @@ class GaugePreviewTest {
             connected = true, live = true, rate = 13f, rpm = 1500, oilTemp = 46, gearTemp = 38,
             oilPeak = 46, gearPeak = 38, gStage = GTracker.Stage.Ready,
             gLat = 0.02f, gLon = 0.01f, peakAccel = 0.08f, peakRight = 0.10f, peakBrake = 0.12f, peakLeft = 0.09f,
-            trace = trace(0.08f, 0.10f, 0.12f, 0.09f),
         ),
     )
 
     @Test
     fun driving() = render(
         "2-driving",
-        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f),
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, tail = tail()),
     )
 
     @Test
@@ -145,7 +145,7 @@ class GaugePreviewTest {
     @Test
     fun gearDriving() = render(
         "12-gear-driving",
-        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4)),
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4), tail = tail()),
     )
 
     @Test

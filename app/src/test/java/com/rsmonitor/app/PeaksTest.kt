@@ -3,7 +3,6 @@ package com.rsmonitor.app
 import com.rsmonitor.app.drive.Peaks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PeaksTest {
@@ -17,23 +16,6 @@ class PeaksTest {
         assertEquals(0.8f, p.brake, 1e-6f)
         assertEquals(0.5f, p.right, 1e-6f)
         assertEquals(0.3f, p.left, 1e-6f)
-    }
-
-    @Test
-    fun outlineReachesEachReadingInItsOwnDirection() {
-        val p = Peaks()
-        assertTrue(p.trace().isEmpty())
-        p.onG(lat = 0.5f, lon = 0f)    // hard right: a quarter of the way round
-        p.onG(lat = 0f, lon = -0.8f)   // braking: half way round
-        val trace = p.trace()
-        assertEquals(Peaks.BINS, trace.size)
-        assertEquals(0.5f, trace[Peaks.BINS / 4], 1e-3f)
-        assertEquals(0.8f, trace[Peaks.BINS / 2], 1e-3f)
-        // nothing was felt while accelerating or turning left
-        assertEquals(0f, trace[0], 1e-3f)
-        assertEquals(0f, trace[3 * Peaks.BINS / 4], 1e-3f)
-        // the outline never reaches further than the strongest reading
-        assertTrue(trace.all { it <= 0.8f + 1e-3f })
     }
 
     @Test
@@ -70,7 +52,6 @@ class PeaksTest {
         p.resetG()
         assertEquals(0f, p.accel, 0f)
         assertEquals(0f, p.right, 0f)
-        assertTrue(p.trace().isEmpty())
         assertEquals(110, p.oil)
     }
 
@@ -82,7 +63,6 @@ class PeaksTest {
         p.onGear(95)
         p.resetAll()
         assertEquals(0f, p.brake, 0f)
-        assertTrue(p.trace().isEmpty())
         assertNull(p.oil)
         assertNull(p.gear)
     }

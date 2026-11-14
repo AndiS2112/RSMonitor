@@ -5,7 +5,7 @@ It shows three things on the car screen:
 
 - Engine oil temperature
 - Gearbox (S tronic) oil temperature
-- A G-meter with a peak trace
+- A G-meter with a tail behind the dot
 - Engine power and torque (the centre dial switches between this and the G-meter)
 - A five-stage shift light
 
@@ -44,7 +44,7 @@ published on the `previews` branch.
 - Live engine speed, as fast as the adapter allows.
 - Android Auto gauge screen, drawn from the design: the three gauges and the shift lights.
   The shift lights, the G-meter and both oil gauges have live data.
-- G-meter from the phone's motion sensor, with peak numbers and a peak outline.
+- G-meter from the phone's motion sensor, with peak numbers and a three-second tail behind the dot.
 - Peak engine-oil and gearbox-oil temperature: an amber hand on each scale, and the exact
   figures called up on the car screen from the phone.
 - The controls are on the phone: live data on/off, centre dial page, shift-light speeds,
@@ -68,8 +68,10 @@ published on the `previews` branch.
   a solid gear with a small gear beside it. Each holds a thermometer: the bulb sits in the
   can or the gear with a gap around it, and the stem and three marks, facing right, stand
   above.
-- The G-meter's dot for the current reading is small (7.7 units in radius) and see-through
-  with a fine solid edge, so the peak outline shows under it.
+- The G-meter's dot for the current reading is small (7.7 units in radius) and solid amber
+  with a fine lighter edge. It pulls an amber tail: its path over the last three seconds,
+  as wide as the dot where it leaves it, thinning and fading to nothing. There is no peak
+  outline any more; the four peak numbers carry the peaks.
 - **No text notices.** Each oil's icon carries its state instead: grey at operating
   temperature, blue below it, and red, pulsing three times a second, in the red zone. The
   temperature number under the gauge also turns red in the red zone.
@@ -130,7 +132,7 @@ time it is put down. On the phone screen, in the G-METER panel:
    back**.
 
 Up on the dial is accelerating, down is braking, right is turning right. **Reset**, under
-Peaks on the phone, clears every peak, the four peak g numbers and the outline included. A phone that slides or tips after calibration
+Peaks on the phone, clears every peak, the four peak g numbers included. A phone that slides or tips after calibration
 gives wrong readings until it is calibrated again; a long slope shows as a small steady offset.
 
 **When peaks reset**
@@ -147,8 +149,14 @@ gives wrong readings until it is calibrated again; a long slope shows as a small
 
 Every push that touches the app is built by GitHub Actions. Open the repo's Actions tab, pick
 the latest "Build APK" run, and download the `rs-monitor-debug-apk` artifact. Unzip it and
-install `app-debug.apk` on the phone. Each build is signed with a fresh debug key, so uninstall
-the previous build before installing a new one.
+install `app-debug.apk` on the phone, with UnknownAuto as before. Every build is signed with
+the same key (`signing/debug.keystore`) and carries a higher build number than the last, so
+a new build installs over the old one: no uninstall, and the settings, the calibration and
+the chosen adapter are kept. Builds from before this key was added were each signed with a
+key of their own, so the first build with it needs one last uninstall.
+
+The key is a debug key and the repo is public, so it is no proof of who built an APK:
+install only APKs from this repo's own Actions runs.
 
 To build on a computer instead, open the repo in Android Studio.
 
@@ -308,8 +316,8 @@ python3 tools/render_preview.py design design/preview
 - White numerals; dots between the labelled marks, red in the hot zone.
 - Red two-tone needle with a ribbed black cap in a chrome-ringed hub.
 - An icon beside each hub: oil can with thermometer, gear with thermometer.
-- G-meter: rings at 0.5, 1.0 and 1.5 g, crosshair, red peak trace, white dot for the current
-  reading, four orange peak numbers.
+- G-meter: rings at 0.5, 1.0 and 1.5 g, crosshair, amber dot for the current
+  reading with an amber tail, four amber peak numbers.
 - The first design had a plain "RS MONITOR" text header; the app has none. No manufacturer
   logos are used.
 - All readings in the design are sample numbers.
@@ -323,7 +331,7 @@ python3 tools/render_preview.py design design/preview
 | G-meter plot | `#1C1C20` |
 | Hairlines | `#3A3A3E` |
 | Text | `#FFFFFF`, labels `#D6D6D6`, secondary `#A8A8AE` |
-| Hot zone, hot reading, G trace | `#FF1A1A` |
+| Hot zone, hot reading | `#FF1A1A` |
 | Hot notice fill | `#C8101A` |
 | G-meter peak numbers, "waiting" in the console | `#F5A623` |
 | Shift lights | green `#2FD158`, yellow `#FFD60A`, red `#FF1A1A`, unlit `#0B0B0C` |
