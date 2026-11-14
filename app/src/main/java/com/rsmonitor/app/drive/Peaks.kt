@@ -7,7 +7,8 @@ import kotlin.math.hypot
 
 /**
  * The highest readings since the last reset: g-force in each of the four directions, the
- * outline of every g-force seen, the two oil temperatures, and engine power and torque.
+ * outline of every g-force seen, the two oil temperatures, engine power and torque, and
+ * engine speed.
  * Plain state, no Android types.
  */
 class Peaks {
@@ -19,6 +20,7 @@ class Peaks {
     var gear: Int? = null; private set
     var power: Int? = null; private set
     var torque: Int? = null; private set
+    var rpm: Int? = null; private set
 
     private val envelope = FloatArray(BINS)
 
@@ -61,6 +63,11 @@ class Peaks {
         if (t == null || newtonMetres > t) torque = newtonMetres
     }
 
+    fun onEngineSpeed(revs: Int) {
+        val now = rpm
+        if (now == null || revs > now) rpm = revs
+    }
+
     /** The outline as g per direction, [BINS] values clockwise from "accelerating". Empty if nothing was recorded. */
     fun trace(): List<Float> = if (envelope.any { it > 0f }) envelope.toList() else emptyList()
 
@@ -78,6 +85,7 @@ class Peaks {
         gear = null
         power = null
         torque = null
+        rpm = null
     }
 
     companion object {

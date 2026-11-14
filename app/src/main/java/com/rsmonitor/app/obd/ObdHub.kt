@@ -537,6 +537,7 @@ object ObdHub {
                     val now = SystemClock.elapsedRealtime()
                     if (speed != null) {
                         _rpm.value = speed
+                        Drive.onEngineSpeed(speed)
                         count++
                         lastReading = now
                         heard()

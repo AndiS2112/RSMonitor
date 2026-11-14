@@ -86,4 +86,16 @@ class PeaksTest {
         assertNull(p.oil)
         assertNull(p.gear)
     }
+
+    @Test
+    fun engineSpeedPeakOnlyRisesAndClearsWithTheRest() {
+        val p = Peaks()
+        assertNull(p.rpm)
+        p.onEngineSpeed(2400); p.onEngineSpeed(8090); p.onEngineSpeed(6400)
+        assertEquals(8090, p.rpm)
+        p.resetG()
+        assertEquals(8090, p.rpm)
+        p.resetAll()
+        assertNull(p.rpm)
+    }
 }

@@ -169,7 +169,7 @@ class GaugePainter {
 
     private fun shiftLights(c: Canvas, f: GaugeFrame) {
         val rpm = f.rpm
-        val colours = if (rpm != null) ShiftLights.colours(rpm) else List(ShiftLights.ON_AT.size) { null }
+        val colours = if (rpm != null) ShiftLights.colours(rpm) else List(ShiftLights.LIGHTS) { null }
         val dark = rpm != null && ShiftLights.isFlashing(rpm) && !f.flashOn
         // five bars leaning to the right, together as wide as the centre dial
         val top = LIGHTS_Y - BAR_H / 2f
@@ -840,7 +840,7 @@ class GaugePainter {
         const val GEAR_HOT = 115
 
         // power and torque scales
-        const val HP_TOP = 480
+        const val HP_TOP = 500
         const val NM_TOP = 450
 
         // palette (see README)

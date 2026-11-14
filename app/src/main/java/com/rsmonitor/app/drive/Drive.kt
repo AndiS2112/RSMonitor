@@ -30,6 +30,7 @@ object Drive : SensorEventListener {
         val gearPeak: Int? = null,
         val powerPeak: Int? = null,
         val torquePeak: Int? = null,
+        val rpmPeak: Int? = null,
     )
 
     private val tracker = GTracker()
@@ -96,7 +97,7 @@ object Drive : SensorEventListener {
         publish()
     }
 
-    /** The car has gone quiet (switched off): forget every peak. */
+    /** Forgets every peak: when the car has gone quiet (switched off), or on Reset on the phone. */
     @Synchronized
     fun resetAllPeaks() {
         peaks.resetAll()
@@ -120,6 +121,14 @@ object Drive : SensorEventListener {
         val before = peaks.power to peaks.torque
         peaks.onPower(horsepower, newtonMetres)
         if (before != peaks.power to peaks.torque) publish()
+    }
+
+    /** Called with every engine-speed reading; only a new highest is passed on to the screens. */
+    @Synchronized
+    fun onEngineSpeed(rpm: Int) {
+        val before = peaks.rpm
+        peaks.onEngineSpeed(rpm)
+        if (before != peaks.rpm) publish()
     }
 
     @Synchronized
@@ -150,6 +159,7 @@ object Drive : SensorEventListener {
             gearPeak = peaks.gear,
             powerPeak = peaks.power,
             torquePeak = peaks.torque,
+            rpmPeak = peaks.rpm,
         )
     }
 }

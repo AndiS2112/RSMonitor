@@ -18,6 +18,7 @@ import kotlin.math.min
 object CarScreen {
     private const val CENTRE_KEY = "centre"
     private const val TORQUE_EVERY_KEY = "torqueEvery"
+    private const val SHIFT_KEY = "shiftSteps"
 
     /** The choices for how often torque is read: with every engine-speed reading, every second, … */
     val TORQUE_EVERY_CHOICES = listOf(1, 2, 3, 4)
@@ -26,6 +27,7 @@ object CarScreen {
     private val _centre = MutableStateFlow(Centre.GMeter)
     private val _areaNote = MutableStateFlow<String?>(null)
     private val _torqueEvery = MutableStateFlow(1)
+    private val _shiftSteps = MutableStateFlow(ShiftLights.STANDARD)
 
     val centre: StateFlow<Centre> = _centre
 
@@ -34,6 +36,12 @@ object CarScreen {
      * the phone, also while driving, and remembered.
      */
     val torqueEvery: StateFlow<Int> = _torqueEvery
+
+    /**
+     * The engine speeds of the shift lights: five lights, then the flash. Set on the phone,
+     * also while driving, and remembered. [ShiftLights] uses them as soon as they change.
+     */
+    val shiftSteps: StateFlow<List<Int>> = _shiftSteps
 
     /** For example "1180×630, clear 12,96 to 1168,618"; null until the car screen has been up. */
     val areaNote: StateFlow<String?> = _areaNote
@@ -48,6 +56,26 @@ object CarScreen {
         ObdHub.torqueWanted = _centre.value == Centre.Power
         _torqueEvery.value = stored.getInt(TORQUE_EVERY_KEY, 1).takeIf { it in TORQUE_EVERY_CHOICES } ?: 1
         ObdHub.torqueEvery = _torqueEvery.value
+        stored.getString(SHIFT_KEY, null)
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.takeIf { ShiftLights.isValid(it) }
+            ?.let {
+                _shiftSteps.value = it
+                ShiftLights.use(it)
+            }
+    }
+
+    /** Moves one shift-light speed by [by] rpm; it stops at its neighbours. */
+    fun moveShiftStep(index: Int, by: Int) = setShiftSteps(ShiftLights.moved(_shiftSteps.value, index, by))
+
+    fun standardShiftSteps() = setShiftSteps(ShiftLights.STANDARD)
+
+    private fun setShiftSteps(steps: List<Int>) {
+        if (!ShiftLights.isValid(steps)) return
+        _shiftSteps.value = steps
+        ShiftLights.use(steps)
+        settings?.edit()?.putString(SHIFT_KEY, steps.joinToString(","))?.apply()
     }
 
     fun setTorqueEvery(n: Int) {

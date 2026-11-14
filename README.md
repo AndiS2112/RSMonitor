@@ -37,16 +37,19 @@ published on the `previews` branch.
 **What it does**
 
 - Finds the OBD adapter, over classic Bluetooth or Bluetooth LE, and sets it up for the car.
-- Discovery console on the phone: type a command, see the reply, switch between the engine
-  unit (7E0) and the gearbox unit (7E1).
-- Live engine speed, read from the engine unit as fast as the adapter allows.
+- The phone app has three sections on a bottom bar: **Settings**, **Connection** and
+  **Peaks** (see "The phone app" below).
+- Console on the phone: type a command, see the reply, switch between the engine unit (7E0)
+  and the gearbox unit (7E1).
+- Live engine speed, as fast as the adapter allows.
 - Android Auto gauge screen, drawn from the design: the three gauges and the shift lights.
   The shift lights, the G-meter and both oil gauges have live data.
 - G-meter from the phone's motion sensor, with peak numbers and a peak outline.
 - Peak engine-oil and gearbox-oil temperature: an amber hand on each scale, and the exact
   figures called up on the car screen from the phone.
-- The controls are on the phone: live data on/off, centre dial page, G-meter calibration,
-  Peak Temp. The car screen keeps one icon button, which Android Auto requires.
+- The controls are on the phone: live data on/off, centre dial page, shift-light speeds,
+  G-meter calibration, peak call-out. The car screen keeps one icon button, which Android
+  Auto requires.
 - Power and torque page for the centre dial, with engine torque as the gearbox reports it.
 - The gear beside the shift lights: P, R, N, D or M (gears chosen by hand) and the gear
   number.
@@ -79,8 +82,8 @@ published on the `previews` branch.
 - Whether the adapter is connected and live data is on shows only in the top corners
   ("OBD off", "PAUSED").
 - Peak oil temperature: a thin amber hand marks the peak on each scale at all times. The
-  exact figure is hidden until it is asked for: the **Peak Temp** button on the phone calls
-  it up for ten seconds (tapping again puts it away sooner), and the row under each gauge
+  exact figure is hidden until it is asked for: **Show temps on car screen**, under Peaks on
+  the phone, calls it up for ten seconds (tapping again puts it away sooner), and the row under each gauge
   then reads "PEAK TEMP" with the peak in amber in place of the current reading. The peak
   is never shown below the current reading.
 - Until the G-meter is calibrated its plot says so, and its four peak numbers show a dash.
@@ -98,7 +101,7 @@ The centre dial's page, G-meter or power and torque, is chosen on the phone (**C
 dial**), and the choice is remembered. The car screen's one icon button switches it too.
 
 - Two rings in one dial, each with a 270° scale open at the bottom: power on the outer ring
-  (0–480 HP), torque on the inner ring (0–450 Nm). The car makes 450 PS at 8,250 rpm and
+  (0–500 HP), torque on the inner ring (0–450 Nm). The car makes 450 PS at 8,250 rpm and
   430 Nm from 4,000 to 6,000 rpm.
 - Each ring has its own needle, solid at its scale and fading out towards the middle.
 - The torque reading and its peak sit in the middle of the torque ring; the power reading
@@ -109,7 +112,7 @@ dial**), and the choice is remembered. The car screen's one icon button switches
   receives it (gearbox ID `2002`): what reaches the clutch, the kind of figure Audi quotes.
   The dials start at zero, so engine braking shows as none.
 - While this page shows, torque is asked from the gearbox straight after engine speed. Each
-  torque reading costs one engine-speed reading, so the phone has a switch (**Centre dial**
+  torque reading costs one engine-speed reading, so the phone has a switch (Settings, **Car screen**
   panel) for how often torque is read: with every engine-speed reading, or every second,
   third or fourth. It can be changed while driving, and the panel shows both rates. On the
   G-meter page torque is not read at all.
@@ -126,14 +129,15 @@ time it is put down. On the phone screen, in the G-METER panel:
 3. If that pull-away was in reverse, braking will show as accelerating: tap **Swap front and
    back**.
 
-Up on the dial is accelerating, down is braking, right is turning right. **Reset peak G**
-clears the four peak numbers and the outline. A phone that slides or tips after calibration
+Up on the dial is accelerating, down is braking, right is turning right. **Reset**, under
+Peaks on the phone, clears every peak, the four peak g numbers and the outline included. A phone that slides or tips after calibration
 gives wrong readings until it is calibrated again; a long slope shows as a small steady offset.
 
 **When peaks reset**
 
-- Peak G: with the Reset peak G button, on a new calibration, and when the car is switched off.
-- Peak oil temperatures: when the car is switched off.
+- Peak G: on a new calibration, with Reset under Peaks, and when the car is switched off.
+- All other peaks (oil temperatures, power, torque, engine speed): with Reset under Peaks,
+  and when the car is switched off.
 - "Switched off" means the car has not answered for 30 seconds, after having answered at
   least once. That covers the Bluetooth link dropping and the ignition going off while the
   adapter stays powered. The 30 seconds only count while the app is asking the car something
@@ -160,15 +164,31 @@ To build on a computer instead, open the repo in Android Studio.
 
 **Finding the oil-temperature IDs**
 
-The "Find IDs" tab asks the selected control unit for every data ID in a range and lists the
+Find IDs (Settings, Tools) asks the selected control unit for every data ID in a range and lists the
 ones that answer, with the raw bytes and what they would mean as a temperature under the two
 formulas VW-group units most often use. It only reads values. To pin an ID down, scan once
 cold and once warm and look for the value that tracks the oil temperature on the dash (for
 the gearbox, against a VCDS reading).
 
+**The phone app**
+
+- **Settings.** Car screen: which page the centre dial shows, and how often torque is read
+  on the power page. Shift lights: the six speeds, each with − and + buttons. G-meter:
+  Calibrate and Swap front / back. Tools: Console, Find IDs and Recorder, each opening as
+  a screen of its own with a way back.
+- **Connection.** The list of adapters to choose from; once connected, the adapter with
+  Disconnect, the live data switch and the live readings (engine speed, gear, both oil
+  temperatures, and torque and power while they are read). The app opens here until an
+  adapter is connected.
+- **Peaks.** The highest engine oil and gearbox oil temperature, power, torque, engine
+  speed, and acceleration, braking and lateral g (the larger of left and right, with both
+  shown). Power and torque are only recorded while the centre dial shows Power, since
+  torque is not read otherwise. Two buttons: show the peak temperatures on the car screen
+  for ten seconds, and Reset, which clears every peak.
+
 **Recording a drive**
 
-The "Record" tab logs what the gearbox reports while the car is driven, several rows a
+The Recorder (Settings, Tools) logs what the gearbox reports while the car is driven, several rows a
 second: engine speed (`2102`), engine torque (`2002`), the selector (`210C`) and the two gear
 candidates (`210E`, `210F`) in every row, one further ID per row in turn, and the engine's
 own speed (`010C`) every tenth row as a check. It only reads values. Live data is off while
@@ -259,6 +279,9 @@ python3 tools/render_preview.py design design/preview
 | 5 | Red | 7,300 rpm |
 
 - From 7,800 rpm all five flash red: upshift.
+- These six speeds are the ones built in. Each can be moved in steps of 100 rpm under
+  Settings on the phone, also while driving; the car screen follows at once and the choice
+  is remembered. A light cannot be set below the one before it or above the one after it.
 - Every step sits 200 rpm below its round figure (3,500, 4,000, 5,000, 6,000, 7,500, 8,000),
   to allow for the time a reading takes to reach the car screen.
 - These are the steps in the app. The first design files under `design/` still use the
