@@ -81,7 +81,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         val oil = ObdHub.oilTemp.value
         val gearbox = ObdHub.gearTemp.value
         // outside the red zones the value never changes, so the screen is not repainted for it
-        val inRedZone = (oil != null && oil >= GaugePainter.OIL_HOT) || (gearbox != null && gearbox >= GaugePainter.GEAR_HOT)
+        val limits = CarScreen.oilLimits.value
+        val inRedZone = (oil != null && oil >= limits.oilHot) || (gearbox != null && gearbox >= limits.gearHot)
         // both halves of the flash last half a period; outside the flash the value never changes
         val flashOn = rpm == null || !ShiftLights.isFlashing(rpm) ||
             (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
@@ -96,6 +97,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             oilPeak = drive.oilPeak,
             gearPeak = drive.gearPeak,
             showPeaks = Drive.peakTempsShown(),
+            limits = limits,
             gStage = drive.stage,
             gLat = if (ready) drive.lat else null,
             gLon = if (ready) drive.lon else null,

@@ -8,6 +8,7 @@ import com.rsmonitor.app.car.GTail
 import com.rsmonitor.app.car.GTailPoints
 import com.rsmonitor.app.car.GaugeFrame
 import com.rsmonitor.app.car.GaugePainter
+import com.rsmonitor.app.car.OilLimits
 import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.drive.Gear
 import java.io.File
@@ -181,5 +182,18 @@ class GaugePreviewTest {
     fun redZoneAtTheLowPointOfThePulse() = render(
         "16-red-zone-pulse-low",
         driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 118, oilPeak = 134, gearPeak = 118, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
+    )
+
+    /**
+     * Limits changed on the phone: engine oil cold below 95 and hot from 110, gearbox oil hot
+     * from 100. The engine oil at 92 is now cold (blue icon) and the gearbox oil at 104 is hot.
+     */
+    @Test
+    fun oilLimitsSetOnThePhone() = render(
+        "19-oil-limits-changed",
+        driven.copy(
+            rpm = 2400, oilTemp = 92, gearTemp = 104, oilPeak = 92, gearPeak = 104, gLat = 0.05f, gLon = 0.03f, gear = Gear('D', 3),
+            limits = OilLimits(oilCold = 95, oilHot = 110, gearCold = 50, gearHot = 100),
+        ),
     )
 }

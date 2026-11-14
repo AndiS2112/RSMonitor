@@ -19,6 +19,7 @@ object CarScreen {
     private const val CENTRE_KEY = "centre"
     private const val TORQUE_EVERY_KEY = "torqueEvery"
     private const val SHIFT_KEY = "shiftSteps"
+    private const val LIMITS_KEY = "oilLimits"
 
     /** The choices for how often torque is read: with every engine-speed reading, every second, … */
     val TORQUE_EVERY_CHOICES = listOf(1, 2, 3, 4)
@@ -28,6 +29,7 @@ object CarScreen {
     private val _areaNote = MutableStateFlow<String?>(null)
     private val _torqueEvery = MutableStateFlow(1)
     private val _shiftSteps = MutableStateFlow(ShiftLights.STANDARD)
+    private val _oilLimits = MutableStateFlow(OilLimits.STANDARD)
 
     val centre: StateFlow<Centre> = _centre
 
@@ -42,6 +44,12 @@ object CarScreen {
      * also while driving, and remembered. [ShiftLights] uses them as soon as they change.
      */
     val shiftSteps: StateFlow<List<Int>> = _shiftSteps
+
+    /**
+     * Where each oil counts as cold and as hot. Set on the phone, also while driving, and
+     * remembered. The car screen draws with them as soon as they change.
+     */
+    val oilLimits: StateFlow<OilLimits> = _oilLimits
 
     /** For example "1180×630, clear 12,96 to 1168,618"; null until the car screen has been up. */
     val areaNote: StateFlow<String?> = _areaNote
@@ -64,6 +72,22 @@ object CarScreen {
                 _shiftSteps.value = it
                 ShiftLights.use(it)
             }
+        stored.getString(LIMITS_KEY, null)
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.let { OilLimits.from(it) }
+            ?.let { _oilLimits.value = it }
+    }
+
+    /** Moves one oil limit by [by] °C; it stops at the ends of its scale and short of its partner. */
+    fun moveOilLimit(which: OilLimits.Which, by: Int) = setOilLimits(_oilLimits.value.moved(which, by))
+
+    fun standardOilLimits() = setOilLimits(OilLimits.STANDARD)
+
+    private fun setOilLimits(limits: OilLimits) {
+        if (!limits.isValid()) return
+        _oilLimits.value = limits
+        settings?.edit()?.putString(LIMITS_KEY, limits.toList().joinToString(","))?.apply()
     }
 
     /** Moves one shift-light speed by [by] rpm; it stops at its neighbours. */

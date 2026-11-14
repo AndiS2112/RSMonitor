@@ -81,6 +81,9 @@ published on the `previews` branch.
   small dot at the fives.
 - Engine oil: scale 50 – 100 – 150 °C, blue below 80 °C, red zone from 130 °C.
 - Gearbox oil: scale 30 – 80 – 130 °C, blue below 50 °C, red zone from 115 °C.
+- Those four limits are the standard ones. Each can be moved on the phone in 5 °C steps,
+  also while driving, and is remembered: anywhere on its scale, with "cold" at least 5 °C
+  below "hot".
 - Whether the adapter is connected and live data is on shows only in the top corners
   ("OBD off", "PAUSED").
 - Peak oil temperature: a thin amber hand marks the peak on each scale at all times. The
@@ -105,7 +108,8 @@ dial**), and the choice is remembered. The car screen's one icon button switches
 - Two rings in one dial, each with a 270° scale open at the bottom: power on the outer ring
   (0–500 HP), torque on the inner ring (0–450 Nm). The car makes 450 PS at 8,250 rpm and
   430 Nm from 4,000 to 6,000 rpm.
-- Each ring has its own needle, solid at its scale and fading out towards the middle.
+- Each ring has its own needle, solid at its scale and fading out at its root. The power
+  needle starts just outside the torque gauge, so it never lies over it.
 - The torque reading and its peak sit in the middle of the torque ring; the power reading
   and its peak sit in the open bottom of the power ring. Peaks are also marked in amber on
   each ring. They clear when the car is switched off.
@@ -181,7 +185,8 @@ the gearbox, against a VCDS reading).
 **The phone app**
 
 - **Settings.** Car screen: which page the centre dial shows, and how often torque is read
-  on the power page. Shift lights: the six speeds, each with − and + buttons. G-meter:
+  on the power page. Shift lights: the six speeds, each with − and + buttons. Oil temperatures:
+  the cold and hot limits of both oils, each with − and + buttons. G-meter:
   Calibrate and Swap front / back. Tools: Console, Find IDs and Recorder, each opening as
   a screen of its own with a way back.
 - **Connection.** The list of adapters to choose from; once connected, the adapter with
@@ -372,7 +377,7 @@ Auto showing live RPM.
   and 20 °C at the next cold start. The app asks for it every three seconds while live.
 - **How the gearbox oil behaves:** it warms far more slowly than the engine (62 °C after
   20 minutes, with the engine oil at 98 °C). Warm, it sits at 70 to 75 °C on the move and
-  climbs to about 85 °C standing still. Its gauge and limits are set for that: 50 °C counts
+  climbs to about 85 °C standing still. Its gauge and standard limits are set for that: 50 °C counts
   as operating temperature and the red zone starts at 115 °C.
 - **Engine oil temperature is data ID `11BD` on the engine control unit:** send `22 11 BD`
   to 7E0. The answer carries two bytes, in tenths of a kelvin: °C = value ÷ 10 − 273.15.

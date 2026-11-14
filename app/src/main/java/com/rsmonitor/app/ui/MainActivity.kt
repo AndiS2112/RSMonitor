@@ -84,6 +84,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rsmonitor.app.car.CarScreen
 import com.rsmonitor.app.car.Centre
+import com.rsmonitor.app.car.OilLimits
 import com.rsmonitor.app.car.ShiftLights
 import com.rsmonitor.app.drive.Drive
 import com.rsmonitor.app.drive.GTracker
@@ -107,6 +108,8 @@ private val Secondary = Color(0xFFA8A8AE)
 private val Failed = Color(0xFFFF5A4A)
 private val OnInk = Color(0xFF0B0B0C)
 private val Amber = Color(0xFFF5A623)
+private val ColdBlue = Color(0xFF4DA6FF)
+private val HotRed = Color(0xFFFF1A1A)
 private val Rule = Color(0xFF2E2E32)
 
 class MainActivity : ComponentActivity() {
@@ -237,6 +240,7 @@ private fun SettingsScreen(onOpen: (Tool) -> Unit) {
     Title("Settings")
     CarScreenPanel()
     ShiftLightsPanel()
+    OilLimitsPanel()
     GMeterPanel()
     PanelColumn("TOOLS", gap = 2.dp) {
         Tool.values().forEachIndexed { i, tool ->
@@ -333,6 +337,50 @@ private fun ShiftLightsPanel() {
         OutlineButton("Back to the standard steps", Modifier.fillMaxWidth().padding(top = 6.dp)) { CarScreen.standardShiftSteps() }
         Text(
             "Each tap is 100 rpm and takes effect at once on the car screen. A light cannot be set below the one before it.",
+            color = Secondary,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+/**
+ * Where each oil counts as cold and as hot. Like the shift lights, they can be changed while
+ * driving and the car screen follows at once.
+ */
+@Composable
+private fun OilLimitsPanel() {
+    val limits by CarScreen.oilLimits.collectAsStateWithLifecycle()
+    val rows = listOf(
+        Triple(OilLimits.Which.OilCold, "Engine oil cold below", ColdBlue),
+        Triple(OilLimits.Which.OilHot, "Engine oil hot from", HotRed),
+        Triple(OilLimits.Which.GearCold, "Gearbox oil cold below", ColdBlue),
+        Triple(OilLimits.Which.GearHot, "Gearbox oil hot from", HotRed),
+    )
+    PanelColumn("OIL TEMPERATURES", gap = 4.dp) {
+        for ((which, name, colour) in rows) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(colour))
+                Text(name, color = Ink, fontSize = 15.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                StepButton("−", "$name: ${OilLimits.STEP} degrees lower") { CarScreen.moveOilLimit(which, -OilLimits.STEP) }
+                Text(
+                    "${limits.value(which)} °C",
+                    color = Ink,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(62.dp),
+                )
+                StepButton("+", "$name: ${OilLimits.STEP} degrees higher") { CarScreen.moveOilLimit(which, OilLimits.STEP) }
+            }
+        }
+        OutlineButton("Back to the standard limits", Modifier.fillMaxWidth().padding(top = 6.dp)) { CarScreen.standardOilLimits() }
+        Text(
+            "Each tap is ${OilLimits.STEP} °C and takes effect at once on the car screen. Below \"cold\" the oil's icon is blue; " +
+                "from \"hot\" its scale, icon and number are red. Standard: engine 80 and 130 °C, gearbox 50 and 115 °C.",
             color = Secondary,
             fontSize = 12.sp,
         )

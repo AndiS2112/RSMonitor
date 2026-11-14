@@ -62,6 +62,8 @@ data class GaugeFrame(
     val peakRight: Float = 0f,
     val peakBrake: Float = 0f,
     val peakLeft: Float = 0f,
+    /** Where each oil counts as cold and as hot; set on the phone. */
+    val limits: OilLimits = OilLimits.STANDARD,
     /** The dot's path over the last few seconds. */
     val tail: GTailPoints = GTailPoints.NONE,
     val centre: Centre = Centre.GMeter,
@@ -121,8 +123,8 @@ class GaugePainter {
         // the three dials are the original drawing, enlarged together about the centre dial
         c.save()
         c.scale(DIAL_SCALE, DIAL_SCALE, CENTRE_X, CENTRE_Y)
-        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(50, 100, 150), OIL_COLD, OIL_HOT, f.oilTemp, f.oilPeak, f.showPeaks, f.pulse, "ENGINE OIL", engineIcon = true)
-        sideGauge(c, RIGHT_X, 1, 30, 130, intArrayOf(30, 80, 130), GEAR_COLD, GEAR_HOT, f.gearTemp, f.gearPeak, f.showPeaks, f.pulse, "GEARBOX OIL", engineIcon = false)
+        sideGauge(c, LEFT_X, -1, 50, 150, intArrayOf(OilLimits.OIL_LOW, 100, OilLimits.OIL_HIGH), f.limits.oilCold, f.limits.oilHot, f.oilTemp, f.oilPeak, f.showPeaks, f.pulse, "ENGINE OIL", engineIcon = true)
+        sideGauge(c, RIGHT_X, 1, 30, 130, intArrayOf(OilLimits.GEAR_LOW, 80, OilLimits.GEAR_HIGH), f.limits.gearCold, f.limits.gearHot, f.gearTemp, f.gearPeak, f.showPeaks, f.pulse, "GEARBOX OIL", engineIcon = false)
         if (f.centre == Centre.Power) powerMeter(c, f) else gMeter(c, f)
         c.restore()
 
@@ -633,7 +635,7 @@ class GaugePainter {
 
     /**
      * Two rings in one dial: power on the outer ring, torque on the inner one. Each has its
-     * own needle, solid at its scale and fading out towards the middle of the dial.
+     * own needle, solid at its scale and fading out at its root; neither crosses the other's gauge.
      */
     private fun powerMeter(c: Canvas, f: GaugeFrame) {
         val cx = CENTRE_X
@@ -679,8 +681,9 @@ class GaugePainter {
             c.drawLine(px(cx, 70f, a), py(cy, 70f, a), px(cx, 80f, a), py(cy, 80f, a), line)
         }
 
-        // needles: power first, so torque's lies over the faded end of it
-        if (power != null) fadingNeedle(c, sweep(power.toFloat(), HP_TOP), 142f, 50f, 96f, 15f, 3.3f)
+        // needles: each stays in its own gauge. Power's starts just outside the torque gauge's
+        // outer line (82) and is solid from 100 outwards.
+        if (power != null) fadingNeedle(c, sweep(power.toFloat(), HP_TOP), 142f, 86f, 100f, 10.5f, 3.3f)
         if (torque != null) fadingNeedle(c, sweep(torque.toFloat(), NM_TOP), 80f, 34f, 56f, 10f, 2.6f)
 
         // numbers: torque in the middle of its ring, power in the open bottom of its ring
@@ -851,13 +854,6 @@ class GaugePainter {
         private const val TAIL_END_W = 3f
         private const val TAIL_LAYERS = 14
         private const val TAIL_LAYER_ALPHA = 41       // 16% a layer; all of them together are close to solid
-
-        // Limits. Below "cold" the oil has not reached operating temperature; from "hot" it
-        // is in the red zone. The gearbox runs cooler than the engine: 70 to 75 °C on the move.
-        const val OIL_COLD = 80
-        const val OIL_HOT = 130
-        const val GEAR_COLD = 50
-        const val GEAR_HOT = 115
 
         // power and torque scales
         const val HP_TOP = 500
