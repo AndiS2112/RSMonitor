@@ -17,6 +17,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -34,7 +35,7 @@ class GaugePreviewTest {
 
     private fun render(name: String, frame: GaugeFrame) {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        GaugePainter().paint(Canvas(bitmap), RectF(0f, 0f, width.toFloat(), height.toFloat()), frame)
+        GaugePainter(GaugePainter.figures(RuntimeEnvironment.getApplication())).paint(Canvas(bitmap), RectF(0f, 0f, width.toFloat(), height.toFloat()), frame)
         val dir = File("build/outputs/gauge-previews").apply { mkdirs() }
         FileOutputStream(File(dir, "$name.png")).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         // something was drawn: the G-meter's centre is not the screen colour of the corner

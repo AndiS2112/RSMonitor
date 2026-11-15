@@ -68,6 +68,13 @@ published on the `previews` branch.
   a solid gear with a small gear beside it. Each holds a thermometer: the bulb sits in the
   can or the gear with a gap around it, and the stem and three marks, facing right, stand
   above.
+- Every figure on the car screen is set in Michroma, a wide, squared font close to the
+  figures on the car's own dials. It is bundled with the app (`res/font/michroma.ttf`, SIL
+  Open Font License, the licence text is in `assets/licenses`). Michroma has one light,
+  upright cut, so the figures are leaned over by a quarter of their height and drawn with
+  an edge that thickens their strokes by about half. They are drawn at 72% of the size the
+  old figures had, since Michroma is that much wider. Labels and units stay in the phone's
+  own font.
 - The G-meter's dot for the current reading is small (7.7 units in radius) and solid amber
   with a fine lighter edge. It pulls an amber tail: its path over the last three seconds,
   as wide as the dot where it leaves it, thinning and fading to nothing. There is no peak
@@ -352,7 +359,8 @@ python3 tools/render_preview.py design design/preview
 | G-meter peak numbers, "waiting" in the console | `#F5A623` |
 | Shift lights | green `#2FD158`, yellow `#FFD60A`, red `#FF1A1A`, unlit `#0B0B0C` |
 
-Saira throughout; numbers are bold italic at 112.5% width. The console log uses JetBrains Mono.
+That early design used Saira throughout, with bold italic numbers at 112.5% width, and JetBrains
+Mono for the console log. The app's car screen now sets its figures in Michroma: see above.
 
 ## Planned approach for the app
 

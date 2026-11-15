@@ -1,5 +1,6 @@
 package com.rsmonitor.app.car
 
+import android.content.Context
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.CornerPathEffect
@@ -12,6 +13,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import com.rsmonitor.app.R
 import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.drive.Gear
 import kotlin.math.abs
@@ -90,8 +92,11 @@ data class GaugeFrame(
  * phone. All geometry is in the design's own
  * units (an 844×442 box) and scaled to whatever area the car gives. Uses only
  * android.graphics, so it can be rendered to a bitmap in tests.
+ *
+ * Every figure is set in [numerals], the bundled Michroma font (see [figures]); labels and
+ * units stay in the phone's own font.
  */
-class GaugePainter {
+class GaugePainter(private val numerals: Typeface) {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -108,7 +113,6 @@ class GaugePainter {
 
     private val plain = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
     private val bold = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-    private val numerals = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD_ITALIC)
 
     fun paint(c: Canvas, area: RectF, f: GaugeFrame, footnote: String? = null) {
         c.drawColor(SCREEN)
@@ -268,7 +272,7 @@ class GaugePainter {
             val a = angle(l.toFloat(), lo, mid, hi, side)
             style(numerals, NUMERAL, if (l >= hotFrom) HOT else INK, Paint.Align.CENTER)
             val r = labelRadius(a, text.measureText(s) / 2f)
-            c.drawText(s, px(cx, r, a), py(cy, r, a) + NUMERAL * 0.35f, text)
+            c.drawText(s, px(cx, r, a), py(cy, r, a) + halfFigure(NUMERAL), text)
         }
 
         // hub: chrome ring and recessed disc
@@ -355,10 +359,13 @@ class GaugePainter {
         c.drawText("°C", start + numberW + 5f, baseline, text)
     }
 
+    /** How far below its middle a figure's baseline lies, for a figure of nominal [size]. */
+    private fun halfFigure(size: Float) = size * FIGURE_SIZE * FIGURE_CAP / 2f
+
     /** The largest radius that keeps a numeral 7 units clear of the gloss band. */
     private fun labelRadius(angleDeg: Float, halfWidth: Float): Float {
         val a = Math.toRadians(abs(angleDeg).toDouble())
-        val halfHeight = NUMERAL * 0.375f
+        val halfHeight = halfFigure(NUMERAL) + 0.5f
         var r = 64f
         while (r > HUB_R + halfWidth) {
             val x = r * sin(a) + halfWidth
@@ -602,7 +609,7 @@ class GaugePainter {
         val mid = (plot + 7f + G_R - 12f) / 2f
         val known = lat != null && lon != null
         style(numerals, 18f, if (known) PEAK else MUTED, Paint.Align.CENTER)
-        val dy = 18f * 0.35f
+        val dy = halfFigure(18f)
         c.drawText(g2(f.peakAccel, known), cx, cy - mid + dy, text)
         c.drawText(g2(f.peakBrake, known), cx, cy + mid + dy, text)
         c.drawText(g2(f.peakLeft, known), cx - mid, cy + dy, text)
@@ -650,7 +657,7 @@ class GaugePainter {
         style(numerals, 19f, INK, Paint.Align.CENTER)
         for (l in labels(HP_TOP)) {
             val a = sweep(l.toFloat(), HP_TOP)
-            c.drawText(l.toString(), px(cx, 103f, a), py(cy, 103f, a) + 19f * 0.35f, text)
+            c.drawText(l.toString(), px(cx, 103f, a), py(cy, 103f, a) + halfFigure(19f), text)
         }
 
         // inner ring: torque
@@ -662,7 +669,7 @@ class GaugePainter {
         style(numerals, 13f, LABEL, Paint.Align.CENTER)
         for (l in labels(NM_TOP)) {
             val a = sweep(l.toFloat(), NM_TOP)
-            c.drawText(l.toString(), px(cx, 54f, a), py(cy, 54f, a) + 13f * 0.35f, text)
+            c.drawText(l.toString(), px(cx, 54f, a), py(cy, 54f, a) + halfFigure(13f), text)
         }
 
         // peaks: amber marks across each ring; never shown below the current reading
@@ -806,15 +813,29 @@ class GaugePainter {
         line.strokeCap = cap
     }
 
+    /**
+     * Sets up the text paint. Figures are given the size they had in the phone's own font and
+     * drawn smaller, because Michroma is much wider: a three-figure number then takes about
+     * the room it always had. Michroma comes in one light, upright cut, so the figures are
+     * also leaned over and drawn with an edge that thickens their strokes.
+     */
     private fun style(face: Typeface, size: Float, colour: Int, align: Paint.Align, tracking: Float = 0f) {
+        val figures = face === numerals
+        val drawn = if (figures) size * FIGURE_SIZE else size
         text.typeface = face
-        text.textSize = size
+        text.textSize = drawn
+        text.textSkewX = if (figures) FIGURE_SLANT else 0f
+        text.style = if (figures) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
+        text.strokeWidth = if (figures) drawn * FIGURE_EDGE else 0f
         text.color = colour
         text.textAlign = align
         text.letterSpacing = tracking
     }
 
     companion object {
+        /** The font for the figures: Michroma, bundled with the app under the SIL Open Font License. */
+        fun figures(context: Context): Typeface = context.resources.getFont(R.font.michroma)
+
         // the design box
         // The design box has the shape of the car's screen area (1156 × 606 px on the RS5's
         // head unit), so the dials can run from edge to edge.
@@ -845,6 +866,12 @@ class GaugePainter {
         private const val BAND_R = SIDE_R - 35f
         private const val HUB_R = 24f
         private const val NUMERAL = 21f
+
+        // Figures are set in Michroma. Against the size a figure had in the phone's own font:
+        private const val FIGURE_SIZE = 0.72f     // drawn this much smaller, as Michroma is wider
+        private const val FIGURE_CAP = 0.75f      // Michroma's figure height, in ems
+        private const val FIGURE_SLANT = -0.25f   // leaned over by a quarter of the height
+        private const val FIGURE_EDGE = 0.054f    // edge drawn round each figure, in ems: its strokes go from 0.094 to 0.148
         private const val READOUT_W = 72f
         private const val G_R = 162f
         private const val G_SCALE = 60f   // design units per g

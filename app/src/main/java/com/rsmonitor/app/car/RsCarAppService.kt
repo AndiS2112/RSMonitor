@@ -45,7 +45,7 @@ class RsCarAppService : CarAppService() {
  * is painted there by [GaugePainter].
  */
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
-    private val renderer = GaugeRenderer()
+    private val renderer = GaugeRenderer(carContext)
     private val tail = GTail()
 
     init {
@@ -141,8 +141,8 @@ fun gaugeTemplate(context: Context, onSwitchCentre: () -> Unit): Template {
 }
 
 /** Paints a frame onto the car's surface whenever the data changes. */
-class GaugeRenderer : SurfaceCallback {
-    private val painter = GaugePainter()
+class GaugeRenderer(context: Context) : SurfaceCallback {
+    private val painter = GaugePainter(GaugePainter.figures(context))
     private var surface: Surface? = null
     private var visibleArea: Rect? = null
     private var frame = GaugeFrame()
