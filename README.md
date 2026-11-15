@@ -187,7 +187,7 @@ the gearbox, against a VCDS reading).
 - **Settings.** Car screen: which page the centre dial shows, and how often torque is read
   on the power page. Shift lights: the six speeds, each with − and + buttons. Oil temperatures:
   the cold and hot limits of both oils, each with − and + buttons. G-meter:
-  Calibrate and Swap front / back. Tools: Console, Find IDs and Recorder, each opening as
+  Calibrate and Swap front / back. Tools: Console, Find IDs, Recorder and Speed test, each opening as
   a screen of its own with a way back.
 - **Connection.** The list of adapters to choose from; once connected, the adapter with
   Disconnect, the live data switch and the live readings (engine speed, gear, both oil
@@ -198,6 +198,17 @@ the gearbox, against a VCDS reading).
   shown). Power and torque are only recorded while the centre dial shows Power, since
   torque is not read otherwise. Two buttons: show the peak temperatures on the car screen
   for ten seconds, and Reset, which clears every peak.
+
+**Speed test**
+
+The Speed test (Settings, Tools) shows what holds the live readings back. It sends the same
+request 40 times and times each answer: a command the adapter answers by itself (`ATI`),
+engine speed from the gearbox (`22 21 02`) as live data reads it, and engine speed from the
+engine (`01 0C`). The first is the cost of the adapter and Bluetooth alone; a reading from
+the car costs that plus the car's answer and the adapter passing it on. If the adapter alone
+is most of a reading, a faster adapter will help; if it is a small part, the test cannot
+tell a slow car from an adapter that is slow at passing answers on. It only reads values,
+takes about ten seconds, and pauses live data while it runs. Run it with the engine idling.
 
 **Recording a drive**
 

@@ -189,6 +189,19 @@ object ObdHub {
     private val _record = MutableStateFlow(RecordState())
     val record: StateFlow<RecordState> = _record
 
+    /** Progress and results of the speed test: see [SpeedTest]. */
+    data class SpeedState(
+        val running: Boolean = false,
+        val done: Int = 0,
+        val total: Int = 0,
+        val timings: List<Timing> = emptyList(),
+        val note: String? = null,
+    )
+
+    private var speedTester: Job? = null
+    private val _speed = MutableStateFlow(SpeedState())
+    val speed: StateFlow<SpeedState> = _speed
+
     fun connect(context: Context, device: BluetoothDevice, lowEnergy: Boolean) {
         if (_link.value != Link.Disconnected) return
         _link.value = Link.Connecting
@@ -222,6 +235,8 @@ object ObdHub {
         scanner = null
         recorder?.cancel()
         recorder = null
+        speedTester?.cancel()
+        speedTester = null
         poller?.cancel()
         poller = null
         transport?.close()
@@ -290,6 +305,7 @@ object ObdHub {
         val hi = maxOf(from, to).coerceIn(0, 0xFFFF)
         val unit = _unit.value
         stopRecording()
+        stopSpeedTest()
         setLive(false)
         _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo, extendedSession = extendedSession)
         scanner = scope.launch {
@@ -362,6 +378,7 @@ object ObdHub {
         val e = elm ?: return
         if (_record.value.running) return
         stopScan()
+        stopSpeedTest()
         setLive(false)
         synchronized(recordedRows) { recordedRows.clear() }
         _record.value = RecordState(running = true)
@@ -425,10 +442,100 @@ object ObdHub {
         }
     }
 
+    /**
+     * Times three kinds of request, [SpeedTest.TRIES] times each: a command the adapter
+     * answers by itself, engine speed from the gearbox as live data reads it, and engine
+     * speed from the engine. It only reads values. Live data, a scan and a recording are
+     * switched off while it runs; live data comes back on afterwards if it was on.
+     */
+    fun startSpeedTest() {
+        val e = elm ?: return
+        if (_speed.value.running) return
+        stopScan()
+        stopRecording()
+        val wasLive = _live.value
+        setLive(false)
+        val total = 3 * SpeedTest.TRIES
+        _speed.value = SpeedState(running = true, total = total)
+        speedTester = scope.launch {
+            /** One timed request; an empty reply when nothing came back in time. */
+            suspend fun timed(unit: String?, command: String): Pair<Float, List<String>> = lock.withLock {
+                if (unit != null) ensureHeader(e, unit, log = false)
+                val sent = System.nanoTime()
+                val reply = try {
+                    e.command(command, 1_500)
+                } catch (ex: LinkLost) {
+                    throw ex
+                } catch (ex: IOException) {
+                    emptyList<String>()
+                }
+                Pair((System.nanoTime() - sent) / 1_000_000f, reply)
+            }
+
+            suspend fun run(name: String, unit: String?, command: String, answered: (List<String>) -> Boolean): Timing {
+                val times = ArrayList<Float>(SpeedTest.TRIES)
+                var failed = 0
+                var warmUpAnswers = 0
+                for (i in 0 until SpeedTest.WARM_UP + SpeedTest.TRIES) {
+                    if (!isActive) break
+                    val (ms, reply) = timed(unit, command)
+                    val ok = answered(reply)
+                    if (ok && unit != null) heard()
+                    if (i < SpeedTest.WARM_UP) {
+                        if (ok) warmUpAnswers++
+                        // nothing answers this at all: do not sit through a timeout for every try
+                        if (i == SpeedTest.WARM_UP - 1 && warmUpAnswers == 0) {
+                            failed = SpeedTest.TRIES
+                            _speed.value = _speed.value.copy(done = _speed.value.done + SpeedTest.TRIES)
+                            break
+                        }
+                        continue
+                    }
+                    if (ok) times += ms else failed++
+                    _speed.value = _speed.value.copy(done = _speed.value.done + 1)
+                }
+                return Timing(name, times, failed).also { _speed.value = _speed.value.copy(timings = _speed.value.timings + it) }
+            }
+
+            try {
+                run(SpeedTest.ADAPTER, null, "ATI") { it.isNotEmpty() }
+                // the short form of a request, where the adapter takes it, as live data uses it
+                val short = parseUdsData(timed(GEARBOX, "22%04X1".format(GEARBOX_SPEED_ID)).second, GEARBOX_SPEED_ID) != null ||
+                    parseRpm(timed(ENGINE, "010C1").second) != null
+                val tail = if (short) "1" else ""
+                run(SpeedTest.GEARBOX, GEARBOX, "22%04X".format(GEARBOX_SPEED_ID) + tail) { parseUdsData(it, GEARBOX_SPEED_ID) != null }
+                run(SpeedTest.ENGINE, ENGINE, "010C$tail") { parseRpm(it) != null }
+                val carAnswered = _speed.value.timings.any { it.name != SpeedTest.ADAPTER && it.median != null }
+                _speed.value = _speed.value.copy(
+                    note = when {
+                        !carAnswered -> "The car did not answer. Switch the ignition on and run the test again."
+                        !short -> "This adapter does not take the short form of a request, so it waits a while after every answer."
+                        else -> null
+                    },
+                )
+            } catch (ex: LinkLost) {
+                append("speed test", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
+            } finally {
+                _speed.value = _speed.value.copy(running = false)
+                if (wasLive && _link.value == Link.Ready && !_live.value) setLive(true)
+            }
+        }
+    }
+
+    fun stopSpeedTest() {
+        speedTester?.cancel()
+        speedTester = null
+    }
+
+    /** The speed test's result as text, for sharing. */
+    fun speedReport(): String = SpeedTest.report(_speed.value.timings, _adapter.value, _speed.value.note)
+
     /** Turns live data on or off. */
     fun setLive(on: Boolean) {
-        // live polling and a recording would only slow each other down
+        // live polling and a recording or a speed test would only slow each other down
         if (on) stopRecording()
+        if (on && _speed.value.running) stopSpeedTest()
         _live.value = on
         poller?.cancel()
         poller = null
@@ -696,7 +803,7 @@ object ObdHub {
             while (isActive) {
                 delay(1_000)
                 val now = SystemClock.elapsedRealtime()
-                val asking = _link.value != Link.Ready || _live.value || _scan.value.running
+                val asking = _link.value != Link.Ready || _live.value || _scan.value.running || _speed.value.running
                 if (!asking) {
                     quietFrom = now
                     continue

@@ -91,6 +91,7 @@ import com.rsmonitor.app.drive.GTracker
 import com.rsmonitor.app.drive.PeakCallout
 import com.rsmonitor.app.obd.DeviceFinder
 import com.rsmonitor.app.obd.ObdHub
+import com.rsmonitor.app.obd.SpeedTest
 import com.rsmonitor.app.obd.hexString
 import java.io.File
 import kotlin.math.max
@@ -158,6 +159,7 @@ private enum class Tool(val title: String, val about: String) {
     Console("Console", "Send a command to the engine or gearbox"),
     FindIds("Find IDs", "Scan a control unit for values it reports"),
     Recorder("Recorder", "Log gearbox values during a drive"),
+    SpeedTest("Speed test", "Time the adapter and the car"),
 }
 
 /**
@@ -713,7 +715,7 @@ private fun ColumnScope.ToolScreen(tool: Tool, onBack: () -> Unit) {
         return
     }
 
-    if (tool != Tool.Recorder) {
+    if (tool == Tool.Console || tool == Tool.FindIds) {
         // which control unit the console and the scan talk to
         SegmentRow(Panel) {
             Segment("Engine · 7E0", unit == ObdHub.ENGINE, Modifier.weight(1f)) { ObdHub.selectUnit(ObdHub.ENGINE) }
@@ -724,6 +726,7 @@ private fun ColumnScope.ToolScreen(tool: Tool, onBack: () -> Unit) {
         Tool.Console -> ConsolePanel(log)
         Tool.FindIds -> ScanPanel(unit)
         Tool.Recorder -> RecordPanel()
+        Tool.SpeedTest -> SpeedTestPanel()
     }
 }
 
@@ -811,6 +814,83 @@ private fun RecordPanel() {
             }
             if (!record.running && record.rows > 0) {
                 OutlineButton("Share file", Modifier.weight(1f)) { shareRecording(context) }
+            }
+        }
+    }
+}
+
+/**
+ * Times the adapter by itself and a reading from the car, to show which of the two holds the
+ * live readings back.
+ */
+@Composable
+private fun SpeedTestPanel() {
+    val speed by ObdHub.speed.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel("SPEED TEST")
+        Text(
+            text = when {
+                speed.running -> "Testing · ${speed.done} of ${speed.total}"
+                speed.timings.isNotEmpty() -> "Done."
+                else -> "Not run yet."
+            },
+            color = Ink,
+            fontSize = 15.sp,
+        )
+        Text(
+            "Sends the same request ${SpeedTest.TRIES} times and times each answer: first a command the adapter answers by " +
+                "itself, then engine speed from the gearbox and from the engine. It only reads values and takes about ten " +
+                "seconds. Run it with the engine idling. Live data pauses while it runs.",
+            color = Secondary,
+            fontSize = 13.sp,
+        )
+        for (timing in speed.timings) {
+            val median = timing.median
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(timing.name, color = Label, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        if (median == null) "no answer" else "%.0f ms".format(median),
+                        color = if (median == null) Failed else Ink,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                if (median != null) {
+                    Text(
+                        "fastest %.0f · 9 in 10 under %.0f · %.0f a second".format(timing.fastest, timing.slow, timing.perSecond) +
+                            if (timing.failed > 0) " · ${timing.failed} without an answer" else "",
+                        color = Secondary,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+        }
+        if (!speed.running) {
+            val adapter = speed.timings.firstOrNull { it.name == SpeedTest.ADAPTER }
+            val car = speed.timings.firstOrNull { it.name == SpeedTest.GEARBOX && it.median != null }
+                ?: speed.timings.firstOrNull { it.name == SpeedTest.ENGINE }
+            val verdict = if (adapter != null && car != null) SpeedTest.verdict(adapter, car) else null
+            if (verdict != null) Text(verdict, color = Ink, fontSize = 15.sp)
+            speed.note?.let { Text(it, color = Amber, fontSize = 14.sp) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilledButton(if (speed.running) "Stop" else if (speed.timings.isEmpty()) "Start test" else "Run again", Modifier.weight(1f)) {
+                if (speed.running) ObdHub.stopSpeedTest() else ObdHub.startSpeedTest()
+            }
+            if (!speed.running && speed.timings.isNotEmpty()) {
+                OutlineButton("Share result", Modifier.weight(1f)) {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, ObdHub.speedReport())
+                    }
+                    context.startActivity(Intent.createChooser(send, "Share result"))
+                }
             }
         }
     }
