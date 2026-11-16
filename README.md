@@ -223,6 +223,13 @@ is most of a reading, a faster adapter will help; if it is a small part, the tes
 tell a slow car from an adapter that is slow at passing answers on. It only reads values,
 takes about ten seconds, and pauses live data while it runs. Run it with the engine idling.
 
+**Where live data's time goes**
+
+While live data runs, the console gets a line every ten seconds, for example
+`17/s · engine speed 52 ms each (fastest 28, slowest 96) · torque 9/s at 31 ms · the rest 14% of the time`.
+It shows, from a real drive, whether requests themselves are slow (the radio) or the time goes
+on everything else: the other requests and the loop. The console keeps its last 200 lines.
+
 **Recording a drive**
 
 The Recorder (Settings, Tools) logs what the gearbox reports while the car is driven, several rows a

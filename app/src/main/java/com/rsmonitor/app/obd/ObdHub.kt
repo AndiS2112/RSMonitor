@@ -34,6 +34,7 @@ object ObdHub {
     const val GEARBOX = "7E1"
 
     private const val LOG_LIMIT = 200
+    private const val TIMING_PERIOD_MS = 10_000L
 
     /** No answer from the car for this long counts as "the car has been switched off". */
     private const val CAR_OFF_MS = 30_000L
@@ -596,6 +597,9 @@ object ObdHub {
             var gearRead = 0L
             var oilAsked = 0L
             var oilRead = 0L
+            // where the time goes, written to the console every few seconds
+            val timing = LiveTiming()
+            var timingStart = windowStart
 
             /** Several gearbox IDs in one request; null when that did not work, and for good after three failures. */
             suspend fun group(e: Elm327, ids: List<Int>, sizes: List<Int>): List<List<Int>>? {
@@ -607,6 +611,7 @@ object ObdHub {
 
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
+                val roundStart = SystemClock.elapsedRealtimeNanos()
                 try {
                     val started = SystemClock.elapsedRealtime()
                     var speed: Int? = null
@@ -615,10 +620,13 @@ object ObdHub {
 
                     if (gearboxMisses < GEARBOX_GIVE_UP || started >= gearboxRetryAt) {
                         speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick == true))
+                        val speedDone = SystemClock.elapsedRealtimeNanos()
+                        timing.speedRequest((speedDone - roundStart) / 1_000_000f)
                         // Torque is a request of its own. Asked for together with engine speed
                         // the answer no longer fits one frame, and that took as long as two.
                         if (torqueWanted && speed != null && round++ % torqueEvery.coerceAtLeast(1) == 0) {
                             nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID, quick == true))
+                            timing.torqueRequest((SystemClock.elapsedRealtimeNanos() - speedDone) / 1_000_000f)
                         }
                         if (speed != null) {
                             gearboxMisses = 0
@@ -738,6 +746,12 @@ object ObdHub {
                     count = 0
                     torqueCount = 0
                     windowStart = now
+                }
+                timing.round((SystemClock.elapsedRealtimeNanos() - roundStart) / 1_000_000f)
+                if (now - timingStart >= TIMING_PERIOD_MS) {
+                    if (!timing.isEmpty) append("live", timing.summary(), failed = false)
+                    timing.reset()
+                    timingStart = now
                 }
             }
         }
