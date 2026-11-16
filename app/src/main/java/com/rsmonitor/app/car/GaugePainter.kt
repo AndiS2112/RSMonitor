@@ -81,6 +81,8 @@ data class GaugeFrame(
     val pulse: Float = 1f,
     /** False during the dark half of the upshift flash. */
     val flashOn: Boolean = true,
+    /** The red glow behind the dials while the shift lights flash: 0 is none, 1 its brightest. See [ShiftGlow]. */
+    val glow: Float = 0f,
 )
 
 /**
@@ -102,6 +104,7 @@ class GaugePainter(private val numerals: Typeface) {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private var tailXy = FloatArray(0)
+    private var glowShaders: List<Shader>? = null
     private val rect = RectF()
     private val barCorners = CornerPathEffect(2.5f)
 
@@ -121,6 +124,14 @@ class GaugePainter(private val numerals: Typeface) {
         c.translate(area.left + (area.width() - DESIGN_W * scale) / 2f, area.top + (area.height() - DESIGN_H * scale) / 2f)
         c.scale(scale, scale)
 
+        // under everything else: the glow from behind the dials
+        if (f.glow > 0f) {
+            c.save()
+            c.scale(DIAL_SCALE, DIAL_SCALE, CENTRE_X, CENTRE_Y)
+            glow(c, f.glow)
+            c.restore()
+        }
+
         header(c, f)
         gear(c, f)
         shiftLights(c, f)
@@ -137,6 +148,40 @@ class GaugePainter(private val numerals: Typeface) {
             c.drawText(footnote, 14f, DESIGN_H - 4f, text)
         }
         c.restore()
+    }
+
+    // ---- shift glow -------------------------------------------------------------
+
+    /**
+     * A red halo round each of the three dials, drawn before them so it shows only outside
+     * their rims: full strength at the rim, fading to nothing [GLOW_REACH] units out.
+     */
+    private fun glow(c: Canvas, level: Float) {
+        val shaders = glowShaders ?: listOf(
+            glowShader(LEFT_X, SIDE_RIM), glowShader(RIGHT_X, SIDE_RIM), glowShader(CENTRE_X, G_R),
+        ).also { glowShaders = it }
+        val rims = floatArrayOf(SIDE_RIM, SIDE_RIM, G_R)
+        val xs = floatArrayOf(LEFT_X, RIGHT_X, CENTRE_X)
+        fill.alpha = (level.coerceIn(0f, 1f) * 255f).toInt()
+        for (i in shaders.indices) {
+            fill.shader = shaders[i]
+            c.drawCircle(xs[i], CENTRE_Y, rims[i] + GLOW_REACH, fill)
+        }
+        fill.shader = null
+        fill.alpha = 255
+    }
+
+    private fun glowShader(cx: Float, rim: Float): Shader {
+        val outer = rim + GLOW_REACH
+        val peak = (GLOW_PEAK * 255f).toInt()
+        val mid = (GLOW_PEAK * GLOW_MID_SHARE * 255f).toInt()
+        val red = HOT and 0x00FFFFFF
+        return RadialGradient(
+            cx, CENTRE_Y, outer,
+            intArrayOf((peak shl 24) or red, (peak shl 24) or red, (mid shl 24) or red, red),
+            floatArrayOf(0f, (rim - 2.4f) / outer, (rim + GLOW_MID) / outer, 1f),
+            Shader.TileMode.CLAMP,
+        )
     }
 
     // ---- header -----------------------------------------------------------------
@@ -865,6 +910,14 @@ class GaugePainter(private val numerals: Typeface) {
         private const val SIDE_R = 116f
         /** The oil dials are drawn at 116 and enlarged by this much. */
         private const val SIDE_SCALE = 1.1f
+        private const val SIDE_RIM = SIDE_R * SIDE_SCALE     // the outer edge of an oil gauge's chrome ring
+
+        // The shift glow, in the dials' own units (the approved draft's "medium": 78% red at
+        // the rim, 100 screen pixels of reach on the 1156-pixel screen).
+        private const val GLOW_PEAK = 0.78f
+        private const val GLOW_REACH = 59.8f
+        private const val GLOW_MID = 22.7f                   // this far out it is down to GLOW_MID_SHARE
+        private const val GLOW_MID_SHARE = 0.42f
         // tucked 76 units behind the centre dial
         private const val LEFT_X = CENTRE_X - 213.6f
         private const val RIGHT_X = CENTRE_X + 213.6f

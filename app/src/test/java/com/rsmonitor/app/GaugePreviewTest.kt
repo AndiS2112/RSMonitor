@@ -185,6 +185,20 @@ class GaugePreviewTest {
         driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 118, oilPeak = 134, gearPeak = 118, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
     )
 
+    /** At the shift point: all five lights lit red and the glow behind the dials at its brightest. */
+    @Test
+    fun shiftGlowBright() = render(
+        "20-shift-glow-bright",
+        driven.copy(centre = Centre.Power, rpm = 7900, power = 398, torque = 354, powerPeak = 398, torquePeak = 394, gear = Gear('M', 3), flashOn = true, glow = 1f),
+    )
+
+    /** The dark half of the flash: the lights are out and the glow is at its dimmest, not gone. */
+    @Test
+    fun shiftGlowDim() = render(
+        "21-shift-glow-dim",
+        driven.copy(rpm = 7900, gLat = 0.02f, gLon = 0.31f, gear = Gear('M', 3), flashOn = false, glow = 0.3f),
+    )
+
     /**
      * Limits changed on the phone: engine oil cold below 95 and hot from 110, gearbox oil hot
      * from 100. The engine oil at 92 is now cold (blue icon) and the gearbox oil at 104 is hot.

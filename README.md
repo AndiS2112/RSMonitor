@@ -68,6 +68,11 @@ published on the `previews` branch.
   a solid gear with a small gear beside it. Each holds a thermometer: the bulb sits in the
   can or the gear with a gap around it, and the stem and three marks, facing right, stand
   above.
+- While all five shift lights flash, a red glow shows from behind the three dials: strongest
+  at their rims and fading out over about 100 screen pixels. It comes up in under a tenth of
+  a second, pulses four times a second in step with the lights without going fully dark
+  (down to 30% between flashes), and dies away over about a fifth of a second after the
+  shift.
 - Every figure on the car screen is set in Michroma, a wide, squared font close to the
   figures on the car's own dials. It is bundled with the app (`res/font/michroma.ttf`, SIL
   Open Font License, the licence text is in `assets/licenses`). Michroma has one light,

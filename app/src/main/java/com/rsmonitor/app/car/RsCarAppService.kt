@@ -47,6 +47,7 @@ class RsCarAppService : CarAppService() {
 class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val renderer = GaugeRenderer(carContext)
     private val tail = GTail()
+    private val shiftGlow = ShiftGlow()
 
     init {
         CarScreen.load(carContext)
@@ -84,8 +85,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         val limits = CarScreen.oilLimits.value
         val inRedZone = (oil != null && oil >= limits.oilHot) || (gearbox != null && gearbox >= limits.gearHot)
         // both halves of the flash last half a period; outside the flash the value never changes
-        val flashOn = rpm == null || !ShiftLights.isFlashing(rpm) ||
-            (SystemClock.elapsedRealtime() / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
+        val flashing = rpm != null && ShiftLights.isFlashing(rpm)
+        val flashOn = !flashing || (now / (ShiftLights.FLASH_PERIOD_MS / 2)) % 2 == 0L
         return GaugeFrame(
             connected = ObdHub.link.value == ObdHub.Link.Ready,
             live = ObdHub.live.value,
@@ -114,6 +115,7 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             torquePeak = drive.torquePeak,
             pulse = if (inRedZone) redZonePulse(SystemClock.elapsedRealtime()) else 1f,
             flashOn = flashOn,
+            glow = shiftGlow.level(now, flashing),
         )
     }
 
