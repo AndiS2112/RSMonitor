@@ -337,7 +337,8 @@ python3 tools/render_preview.py design design/preview
 - Dark grey screen, charcoal dial faces, chrome rings, a black gloss band behind the dots on
   the oil gauges.
 - White numerals; dots between the labelled marks, red in the hot zone.
-- Red two-tone needle with a ribbed black cap in a chrome-ringed hub.
+- Red two-tone needle with a ribbed black cap in a chrome-ringed hub. In the app the cap is
+  short: it ends 6 units past the hub's silver ring, so nearly all of the needle shows red.
 - An icon beside each hub: oil can with thermometer, gear with thermometer.
 - G-meter: rings at 0.5, 1.0 and 1.5 g, crosshair, amber dot for the current
   reading with an amber tail, four amber peak numbers.

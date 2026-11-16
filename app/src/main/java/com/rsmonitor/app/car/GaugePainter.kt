@@ -394,11 +394,16 @@ class GaugePainter(private val numerals: Typeface) {
         stroke(NEEDLE_RIDGE, 0.8f)
         c.drawLine(0f, -95f, 0f, 6f, line)
 
-        // ribbed black cap over the root of the blade
+        // Ribbed black cap over the root of the blade. It ends just clear of the hub's silver
+        // ring, so nearly all of the needle shows red. The outline was drawn for a longer cap:
+        // its front, up to where it is widest, is drawn shorter; from there back it is as drawn.
+        val front = CAP_REACH - (CAP_DRAWN_REACH - CAP_WIDEST)
         path.rewind()
         for ((i, p) in CAP_OUTLINE.withIndex()) {
             val x = p.first / 100f * 18f - 9f
-            val y = p.second / 100f * 61f - 42f
+            val drawn = p.second / 100f * CAP_DRAWN_LENGTH
+            val along = if (drawn <= CAP_WIDEST) drawn * front / CAP_WIDEST else front + (drawn - CAP_WIDEST)
+            val y = along - CAP_REACH
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         path.close()
@@ -925,6 +930,13 @@ class GaugePainter(private val numerals: Typeface) {
         private val CAP_AT = floatArrayOf(0f, 0.10f, 0.20f, 0.36f, 0.44f, 0.50f, 0.56f, 0.64f, 0.80f, 0.90f, 1f)
 
         /** Cap outline as percentages of an 18×61 box whose pivot is 42 down from the top. */
+        // The needle's black cap. Its outline is in hundredths of an 18 × 61 box, drawn to reach
+        // 42 units out from the middle of the hub and 19 the other way; it is widest 40.26 units
+        // along. It is now drawn to reach only 30 units out: the hub's silver ring is 24 in radius.
+        private const val CAP_DRAWN_LENGTH = 61f
+        private const val CAP_DRAWN_REACH = 42f
+        private const val CAP_WIDEST = 0.66f * CAP_DRAWN_LENGTH
+        private const val CAP_REACH = 30f
         private val CAP_OUTLINE = listOf(
             30f to 0f, 70f to 0f, 70f to 7f, 84f to 11f, 100f to 66f, 100f to 93f,
             84f to 100f, 16f to 100f, 0f to 93f, 0f to 66f, 16f to 11f, 30f to 7f,
