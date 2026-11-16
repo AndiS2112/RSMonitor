@@ -115,7 +115,8 @@ class GaugeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             torquePeak = drive.torquePeak,
             pulse = if (inRedZone) redZonePulse(SystemClock.elapsedRealtime()) else 1f,
             flashOn = flashOn,
-            glow = shiftGlow.level(now, flashing),
+            // switched off on the phone, it is fed "not flashing" and so stays, or dies away, dark
+            glow = shiftGlow.level(now, flashing && CarScreen.shiftGlow.value),
         )
     }
 

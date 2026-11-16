@@ -20,6 +20,7 @@ object CarScreen {
     private const val TORQUE_EVERY_KEY = "torqueEvery"
     private const val SHIFT_KEY = "shiftSteps"
     private const val LIMITS_KEY = "oilLimits"
+    private const val GLOW_KEY = "shiftGlow"
 
     /** The choices for how often torque is read: with every engine-speed reading, every second, … */
     val TORQUE_EVERY_CHOICES = listOf(1, 2, 3, 4)
@@ -30,6 +31,7 @@ object CarScreen {
     private val _torqueEvery = MutableStateFlow(1)
     private val _shiftSteps = MutableStateFlow(ShiftLights.STANDARD)
     private val _oilLimits = MutableStateFlow(OilLimits.STANDARD)
+    private val _shiftGlow = MutableStateFlow(true)
 
     val centre: StateFlow<Centre> = _centre
 
@@ -50,6 +52,9 @@ object CarScreen {
      * remembered. The car screen draws with them as soon as they change.
      */
     val oilLimits: StateFlow<OilLimits> = _oilLimits
+
+    /** Whether the red glow shows behind the dials while the shift lights flash. On as built; remembered. */
+    val shiftGlow: StateFlow<Boolean> = _shiftGlow
 
     /** For example "1180×630, clear 12,96 to 1168,618"; null until the car screen has been up. */
     val areaNote: StateFlow<String?> = _areaNote
@@ -72,11 +77,17 @@ object CarScreen {
                 _shiftSteps.value = it
                 ShiftLights.use(it)
             }
+        _shiftGlow.value = stored.getBoolean(GLOW_KEY, true)
         stored.getString(LIMITS_KEY, null)
             ?.split(',')
             ?.mapNotNull { it.trim().toIntOrNull() }
             ?.let { OilLimits.from(it) }
             ?.let { _oilLimits.value = it }
+    }
+
+    fun setShiftGlow(on: Boolean) {
+        _shiftGlow.value = on
+        settings?.edit()?.putBoolean(GLOW_KEY, on)?.apply()
     }
 
     /** Moves one oil limit by [by] °C; it stops at the ends of its scale and short of its partner. */

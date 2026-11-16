@@ -312,6 +312,7 @@ private fun CarScreenPanel() {
 @Composable
 private fun ShiftLightsPanel() {
     val steps by CarScreen.shiftSteps.collectAsStateWithLifecycle()
+    val glow by CarScreen.shiftGlow.collectAsStateWithLifecycle()
     val names = listOf("Green", "Yellow 1", "Yellow 2", "Yellow 3", "Red", "All flash")
     val colours = listOf(ShiftLights.GREEN, ShiftLights.YELLOW, ShiftLights.YELLOW, ShiftLights.YELLOW, ShiftLights.RED, ShiftLights.RED)
     PanelColumn("SHIFT LIGHTS", gap = 4.dp) {
@@ -339,6 +340,16 @@ private fun ShiftLightsPanel() {
         OutlineButton("Back to the standard steps", Modifier.fillMaxWidth().padding(top = 6.dp)) { CarScreen.standardShiftSteps() }
         Text(
             "Each tap is 100 rpm and takes effect at once on the car screen. A light cannot be set below the one before it.",
+            color = Secondary,
+            fontSize = 12.sp,
+        )
+        Text("Red underglow while all five flash", color = Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
+        SegmentRow {
+            Segment("On", glow, Modifier.weight(1f)) { CarScreen.setShiftGlow(true) }
+            Segment("Off", !glow, Modifier.weight(1f)) { CarScreen.setShiftGlow(false) }
+        }
+        Text(
+            "A red glow from behind the three dials, pulsing with the lights. Off leaves only the lights flashing.",
             color = Secondary,
             fontSize = 12.sp,
         )

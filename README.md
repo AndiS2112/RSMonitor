@@ -73,6 +73,7 @@ published on the `previews` branch.
   a second, pulses four times a second in step with the lights without going fully dark
   (down to 30% between flashes), and dies away over about a fifth of a second after the
   shift.
+  It can be switched off on the phone, under Settings, Shift lights; the choice is remembered.
 - Every figure on the car screen is set in Michroma, a wide, squared font close to the
   figures on the car's own dials. It is bundled with the app (`res/font/michroma.ttf`, SIL
   Open Font License, the licence text is in `assets/licenses`). Michroma has one light,
