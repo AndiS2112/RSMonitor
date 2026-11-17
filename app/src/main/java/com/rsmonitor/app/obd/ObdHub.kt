@@ -42,15 +42,24 @@ object ObdHub {
     /** An engine-speed reading older than this is no longer shown. */
     private const val STALE_MS = 2_000L
 
-    /** Oil temperatures move slowly, and every question about them costs an engine-speed reading. */
+    /**
+     * Oil temperatures move slowly, and every question about them costs an engine-speed reading.
+     * The gearbox's comes in the same request as its mode byte (automatic or by hand), so that
+     * pair stays at three seconds: any slower and D or M would show late, for next to no gain.
+     */
     private const val GEAR_PERIOD_MS = 3_000L
     private const val GEAR_STALE_MS = 10_000L
-    private const val OIL_PERIOD_MS = 3_000L
-    private const val OIL_STALE_MS = 10_000L
 
-    /** The gear and the selector are asked for twice a second; a gear older than this is not shown. */
-    private const val SELECTOR_PERIOD_MS = 500L
-    private const val SELECTOR_STALE_MS = 3_000L
+    /**
+     * The engine's oil temperature is the costly one: the adapter has to be pointed at the
+     * engine and back at the gearbox, three exchanges in all. Every five seconds.
+     */
+    private const val OIL_PERIOD_MS = 5_000L
+    private const val OIL_STALE_MS = 15_000L
+
+    /** The gear and the selector are asked for once a second; a gear older than this is not shown. */
+    private const val SELECTOR_PERIOD_MS = 1_000L
+    private const val SELECTOR_STALE_MS = 4_000L
 
     /** After this many rounds without engine speed from the gearbox, the engine is asked instead. */
     private const val GEARBOX_GIVE_UP = 5
@@ -121,11 +130,11 @@ object ObdHub {
     val power: StateFlow<Int?> = _power
 
     private val _oilTemp = MutableStateFlow<Int?>(null)
-    /** Engine oil temperature in °C, asked from the engine control unit every few seconds while live. */
+    /** Engine oil temperature in °C, asked from the engine control unit every five seconds while live. */
     val oilTemp: StateFlow<Int?> = _oilTemp
 
     private val _gear = MutableStateFlow<Gear?>(null)
-    /** The selector position and gear, asked from the gearbox twice a second while live. */
+    /** The selector position and gear, asked from the gearbox once a second while live. */
     val gear: StateFlow<Gear?> = _gear
 
     private val _gearTemp = MutableStateFlow<Int?>(null)
@@ -561,7 +570,7 @@ object ObdHub {
      *
      * Everything fast comes from the gearbox control unit, so the adapter does not have to be
      * pointed back and forth: engine speed in every round and, while the centre dial shows
-     * power ([torqueWanted]), engine torque straight after it. Twice a second the gear and
+     * power ([torqueWanted]), engine torque straight after it. Once a second the gear and
      * the selector are asked for; every few seconds the gearbox's mode
      * byte and oil temperature, and, from the engine control unit, the engine oil temperature.
      *
@@ -673,7 +682,7 @@ object ObdHub {
                     }
                     val answering = now - lastReading < STALE_MS
 
-                    // twice a second: which gear, and where the selector is
+                    // once a second: which gear, and where the selector is
                     if (answering && now - selectorAsked >= SELECTOR_PERIOD_MS) {
                         selectorAsked = now
                         val pair = group(e, listOf(GEARBOX_GEAR_ID, GEARBOX_SELECTOR_ID), listOf(1, 1))
@@ -710,7 +719,7 @@ object ObdHub {
                         }
                     }
 
-                    // and, at the same pace, the engine for its oil temperature
+                    // and, a little less often, the engine for its oil temperature
                     if (answering && now - oilAsked >= OIL_PERIOD_MS) {
                         oilAsked = now
                         val celsius = readOne(e, ENGINE, ENGINE_OIL_ID, quick == true)?.let { engineOilCelsiusOf(it) }
