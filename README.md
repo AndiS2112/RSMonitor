@@ -110,8 +110,7 @@ published on the `previews` branch.
 
 The selector position and gear are drawn just left of the shift lights: a small mode letter
 and a large gear number ("D 4", "M 3"), or one large letter for P, R and N. It comes from
-the gearbox twice a second while live. Only the D or M letter can lag, by up to five
-seconds: it is read together with the gearbox oil temperature. M means the gears are being chosen by hand; S shows
+the gearbox twice a second while live. M means the gears are being chosen by hand; S shows
 as D, because the values found so far do not tell the two apart.
 
 **Power and torque**
@@ -408,8 +407,7 @@ Auto showing live RPM.
 - **Gearbox oil temperature is data ID `2104` on the gearbox control unit:** send `22 21 04`
   to 7E1. The answer carries one byte; the temperature in °C is that byte minus 40.
   Confirmed on the car: 19 °C after standing for days with 18 °C outside (`62 21 04 3B`),
-  and 20 °C at the next cold start. The app asks for it every five seconds while live, and for the engine's oil
-  temperature every three.
+  and 20 °C at the next cold start. The app asks for it every three seconds while live.
 - **How the gearbox oil behaves:** it warms far more slowly than the engine (62 °C after
   20 minutes, with the engine oil at 98 °C). Warm, it sits at 70 to 75 °C on the move and
   climbs to about 85 °C standing still. Its gauge and standard limits are set for that: 50 °C counts

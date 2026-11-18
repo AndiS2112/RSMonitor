@@ -42,18 +42,9 @@ object ObdHub {
     /** An engine-speed reading older than this is no longer shown. */
     private const val STALE_MS = 2_000L
 
-    /**
-     * Oil temperatures move slowly, and every question about them costs an engine-speed reading.
-     * The gearbox's is asked for every five seconds. Its mode byte (automatic or by hand) comes
-     * in the same request, so D or M can show up to five seconds late.
-     */
-    private const val GEAR_PERIOD_MS = 5_000L
-    private const val GEAR_STALE_MS = 15_000L
-
-    /**
-     * The engine's oil temperature, every three seconds. It is the costly one: the adapter has
-     * to be pointed at the engine and back at the gearbox, three exchanges in all.
-     */
+    /** Oil temperatures move slowly, and every question about them costs an engine-speed reading. */
+    private const val GEAR_PERIOD_MS = 3_000L
+    private const val GEAR_STALE_MS = 10_000L
     private const val OIL_PERIOD_MS = 3_000L
     private const val OIL_STALE_MS = 10_000L
 
@@ -130,7 +121,7 @@ object ObdHub {
     val power: StateFlow<Int?> = _power
 
     private val _oilTemp = MutableStateFlow<Int?>(null)
-    /** Engine oil temperature in °C, asked from the engine control unit every three seconds while live. */
+    /** Engine oil temperature in °C, asked from the engine control unit every few seconds while live. */
     val oilTemp: StateFlow<Int?> = _oilTemp
 
     private val _gear = MutableStateFlow<Gear?>(null)
@@ -138,7 +129,7 @@ object ObdHub {
     val gear: StateFlow<Gear?> = _gear
 
     private val _gearTemp = MutableStateFlow<Int?>(null)
-    /** Gearbox oil temperature in °C, asked from the gearbox control unit every five seconds while live. */
+    /** Gearbox oil temperature in °C, asked from the gearbox control unit every few seconds while live. */
     val gearTemp: StateFlow<Int?> = _gearTemp
 
     /** When the car last answered anything, on the SystemClock.elapsedRealtime clock. */
@@ -719,7 +710,7 @@ object ObdHub {
                         }
                     }
 
-                    // and, a little more often, the engine for its oil temperature
+                    // and, at the same pace, the engine for its oil temperature
                     if (answering && now - oilAsked >= OIL_PERIOD_MS) {
                         oilAsked = now
                         val celsius = readOne(e, ENGINE, ENGINE_OIL_ID, quick == true)?.let { engineOilCelsiusOf(it) }
