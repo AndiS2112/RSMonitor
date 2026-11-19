@@ -118,7 +118,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         CarScreen.load(this)
-        setContent { App() }
+        val start = intent?.getStringExtra(EXTRA_SECTION)
+        setContent { App(start) }
     }
 
     // the G-meter listens to the phone's motion sensor while this screen is open
@@ -131,6 +132,11 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         Drive.release()
         super.onStop()
+    }
+
+    companion object {
+        /** Optional: the tab to open on, by its title ("Settings", "Connection" or "Peaks"). Used to draw the previews. */
+        const val EXTRA_SECTION = "section"
     }
 }
 
@@ -167,9 +173,12 @@ private enum class Tool(val title: String, val about: String) {
  * until an adapter is connected, since nothing else works before that.
  */
 @Composable
-private fun App() {
+private fun App(start: String? = null) {
     var section by rememberSaveable {
-        mutableStateOf(if (ObdHub.link.value == ObdHub.Link.Ready) Section.Settings else Section.Connection)
+        mutableStateOf(
+            Section.values().firstOrNull { it.title == start }
+                ?: if (ObdHub.link.value == ObdHub.Link.Ready) Section.Settings else Section.Connection,
+        )
     }
     var tool by rememberSaveable { mutableStateOf<Tool?>(null) }
     BackHandler(enabled = tool != null) { tool = null }
