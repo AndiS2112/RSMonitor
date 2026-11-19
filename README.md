@@ -1,38 +1,48 @@
 # RS Monitor
 
-An Android Auto gauge app for an Audi RS5 (B8.5), read over a generic Bluetooth OBD2 adapter.
-It shows three things on the car screen:
+An Android Auto gauge app for an Audi RS5 (B8.5), read over a Bluetooth OBD2 adapter. On the
+car screen it shows:
 
-- Engine oil temperature
-- Gearbox (S tronic) oil temperature
-- A G-meter with a tail behind the dot
-- Engine power and torque (the centre dial switches between this and the G-meter)
-- A five-stage shift light
+- Engine oil temperature and gearbox (S tronic) oil temperature, each with its peak
+- A centre dial that switches between a G-meter and engine power and torque
+- A five-stage shift light, with a red glow from behind the dials at the shift point
+- The gear
 
-Status: **design done, app partly built.** In the car, the app connects to the adapter,
-reaches the engine and gearbox, and shows on Android Auto with live engine speed. The G-meter
-runs from the phone's motion sensor once calibrated. Both oil temperatures are read from
-the car and have been checked against it. Engine torque and the gear have no data yet:
-their data IDs on this car are still being looked for.
+Status: **in use in the car.** The app connects to the adapter and reads everything it shows
+from the car: both oil temperatures (checked against the car), and engine speed, engine torque
+and the gear from the gearbox. The G-meter runs from the phone's motion sensor once
+calibrated. Still open: S shows as D, torque reads a little below Audi's figures, and how
+fast the screen updates is set by the adapter's Bluetooth link (see "Open questions").
 
-## The design
+## What it looks like
 
-| Cold start | Driving | Hot |
+**The car screen**
+
+| G-meter page | Power and torque page |
+|---|---|
+| ![G-meter page while driving](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/2-driving.png) | ![Power and torque page](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/8-power-peak-torque.png) |
+| **At the shift point** | **Both oils in the red zone** |
+| ![All five shift lights lit, with the red glow behind the dials](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/20-shift-glow-bright.png) | ![Both oil gauges in the red zone](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/3-hot.png) |
+| **Cold start** | **Peak temperatures called up** |
+| ![Cold start, oil icons blue](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/1-cold-start.png) | ![Peak temperatures shown under the oil gauges](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/4-peaks-called-up.png) |
+
+**The phone app**
+
+| Settings | Connection | Peaks |
 |---|---|---|
-| ![Cold start](design/preview/cold-start.png) | ![Driving](design/preview/driving.png) | ![Hot](design/preview/hot.png) |
+| ![Settings tab](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/phone-settings.png) | ![Connection tab](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/phone-connection.png) | ![Peaks tab](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/phone-peaks.png) |
 
-The phone screen for finding and checking the car's data IDs:
+Settings is longer than a phone screen: [the whole of it](https://raw.githubusercontent.com/AndiS2112/RSMonitor/previews/phone-settings-full.png).
 
-<img src="design/preview/console.png" alt="Discovery console" width="300">
+These pictures are not mockups. Every build draws the car screen and the phone's three tabs
+with the app's own code and publishes the files on the `previews` branch, and the pictures
+above are loaded from there. They show the most recent build of any branch, with sample
+readings.
 
-The previews are rendered without the web font, so the lettering falls back to a local font.
-On the design canvas the numbers and labels are set in Saira.
+The first design, an 800×480 mockup made before any code, is kept under `design/` (see "What
+is in this repo"). The app's screen has moved on from it.
 
-These three images are the earlier 800×480 design. The app's screen has since moved on (see
-"Gauge screen layout in the app" below); every build draws the current screen to PNG files,
-published on the `previews` branch.
-
-## The app (milestone 1)
+## The app
 
 **What it does**
 
@@ -270,6 +280,10 @@ launcher" in Android Auto's settings on the phone.
 
 | Path | What it is |
 |---|---|
+| `app/` | The Android app: the phone screens, the Android Auto gauge screen, and the adapter link |
+| `app/src/test/` | Tests, and the two that draw the car screen and the phone tabs to PNG files |
+| `.github/workflows/build.yml` | Builds the APK and publishes the drawn screens to the `previews` branch |
+| `signing/debug.keystore` | The debug key every build is signed with, so builds install over each other |
 | `design/Warmup.dc.html` | Android Auto screen at cold start, with a warm-up notice |
 | `design/Main.dc.html` | Android Auto screen while driving at normal temperatures |
 | `design/Hot.dc.html` | Android Auto screen with both oils in the hot zone |
@@ -280,6 +294,7 @@ launcher" in Android Auto's settings on the phone.
 | `tools/rail.html` | The left-hand Android Auto menu bar used by the script |
 | `tools/render_preview.py` | Script that renders the PNG previews |
 
+Everything under `design/` and `tools/` is the first design, from before the app existed.
 The `.dc.html` files are design-canvas source. They load a `support.js` runtime that the
 canvas provides, so they do not render on their own in a browser. Use the previews to look
 at the design here.
@@ -293,24 +308,9 @@ python3 tools/render_preview.py design design/preview
 
 ## Design decisions
 
-**Layout**
-
-- Screen is 800×480. This is a guess at the MMI screen and has not been checked on the car.
-- G-meter in the centre and largest (324 px). Engine oil on the left and gearbox oil on the
-  right (232 px each), tucked 40 px behind the G-meter, all three on one centre line.
-- Each oil gauge has its name and precise temperature on one line underneath: reading to the
-  right of "ENGINE OIL", to the left of "GEARBOX OIL". The reading has a fixed width so the
-  label does not move as digits change.
-- A row of five shift lights sits under the title, above the G-meter.
-- (First design only; the app has no notices any more.) A slot at the bottom is reserved for notices, so the gauges do not move when one appears.
-
-**States**
-
-- **Cold start:** notice "Engine and gearbox still cold — oil below 80 °C".
-- **Driving:** no notice.
-- **Hot:** the reading turns red once the oil is in its hot zone, and a filled red warning
-  notice appears: "Engine and gearbox oil hot — above 130 °C and 120 °C". It is deliberately
-  bolder than the cold notice. The wording for only one oil being hot is not written yet.
+How the car screen is laid out, its scales and what each oil's icon shows are described under
+"Gauge screen layout in the app" above. The first design differed: an 800×480 screen with a
+title, a text notice at the bottom for cold and hot oil, and a gearbox scale of 50 to 130 °C.
 
 **Shift light**
 
@@ -332,18 +332,6 @@ python3 tools/render_preview.py design design/preview
   earlier steps (4,000 to 8,000 rpm, flashing from 8,200).
 - Lights stay on once passed, so they fill from left to right. Unlit lights show as dark sockets.
 - The flash is four times a second and stops if the device asks for reduced motion.
-- The sample screens show the three cases: cold start at 1,500 rpm (all off), driving at
-  6,300 rpm (green and two yellow), hot at 8,300 rpm (flashing; the preview image shows all
-  five lit, since a still image cannot flash).
-
-**Scales**
-
-- Engine oil: 50 – 100 – 150 °C, hot zone from 130 °C.
-- Gearbox oil: 50 – 100 – 130 °C, hot zone from 120 °C.
-- 100 °C sits at the middle of each scale (9 o'clock on the left gauge, 3 o'clock on the
-  right). On the gearbox gauge this makes the scale uneven: 100–130 °C is stretched over the
-  same arc as 50–100 °C.
-- The hot-zone limits are the owner's choice, not Audi's published warning limits.
 
 **Look**
 
@@ -376,20 +364,20 @@ python3 tools/render_preview.py design design/preview
 That early design used Saira throughout, with bold italic numbers at 112.5% width, and JetBrains
 Mono for the console log. The app's car screen now sets its figures in Michroma: see above.
 
-## Planned approach for the app
+## How the app is built
 
-- **Android Auto screen:** Google's Car App Library, sideloaded (not a Play Store app).
-- **OBD link:** Kotlin layer talking to an ELM327-type adapter over Bluetooth, sending
-  requests to the engine unit (7E0) and gearbox unit (7E1).
-- **Shift light:** from engine speed, which is a standard OBD2 value (PID 0C), so it needs no
-  Audi-specific data ID. It has to be polled far more often than the two temperatures.
-- **G-meter:** from the phone's motion sensor, with a calibrate step for how the phone is
-  mounted.
-- **Phone app:** adapter pairing, plus the discovery console for sending commands and checking
-  decoded values against VCDS.
-
-First milestone: Bluetooth connection, the discovery console, and a test screen on Android
-Auto showing live RPM.
+- **Android Auto screen:** Google's Car App Library, sideloaded (not a Play Store app). The
+  gauges are drawn by the app itself onto the surface Android Auto hands it, 30 times a
+  second.
+- **OBD link:** a Kotlin layer talking to an ELM327-type adapter over Bluetooth (LE or
+  classic), sending requests to the engine unit (7E0) and the gearbox unit (7E1).
+- **Shift light, power and gear:** engine speed, engine torque and the gear are all read from
+  the gearbox unit, which answers faster than the engine unit. Power is worked out from
+  torque and engine speed.
+- **G-meter:** from the phone's motion sensor, with a calibrate step for how the phone lies
+  in the car.
+- **Phone app:** settings, the adapter connection and the peaks, plus the tools used to find
+  and check the car's data IDs (console, Find IDs, recorder, speed test).
 
 ## Known about the car and the adapter
 
@@ -463,37 +451,37 @@ Auto showing live RPM.
 
 ## Open questions
 
-1. **The data IDs for engine oil temperature and gearbox oil temperature** are not known yet.
-   They have to be found on the car and checked against the dash display and VCDS.
-3. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
+1. **Whether the adapter is classic Bluetooth or Bluetooth LE.** The app handles both, so this
    only matters for which entry to pick in the adapter list.
-4. **Whether three pulses a second reads well on the car screen**, which repaints about 30
+2. **Whether three pulses a second reads well on the car screen**, which repaints about 30
    times a second.
-5. **Whether the motion sensor keeps reporting with the phone's screen off** while Android
+3. **Whether the motion sensor keeps reporting with the phone's screen off** while Android
    Auto is running. Not yet checked in the car.
-6. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
+4. **Whether the gauge screen stays smooth** now that the G-meter repaints it about 16 times
    a second.
-7. **Engine torque reads below Audi's figures.** On one pull in second and third the peaks
+5. **Engine torque reads below Audi's figures.** On one pull in second and third the peaks
    were 394 Nm (6,100 rpm) and about 404 PS (351 Nm at 8,090 rpm), against 430 Nm and
    450 PS. Whether that is the engine, the conditions, or throttle not fully open for long
    enough is not known.
-8. **S cannot be told from D** with the values found so far, so S shows as D. Finding it
+6. **S cannot be told from D** with the values found so far, so S shows as D. Finding it
    means scanning a wider range of gearbox IDs once in D and once in S.
-9. **How fast the screen updates.** With engine speed, torque and the gear all coming from
-   the gearbox, the first build gave about 5 readings a second on the power page, and the
-   shift lights felt slow. Three changes since: torque is asked for on its own instead of
-   in one long answer with engine speed; a Bluetooth LE adapter is asked for the short
-   connection interval; and the adapter is tried with a "1" after each request, so it hands
-   the answer over without waiting for more (the console says "Short waits: on" when the
-   adapter takes it). The rate shows top right on the car screen; to be checked on the car.
-10. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
+7. **How fast the screen updates.** Measured on the car with the phone's Speed test and the
+   console's "live" lines. With this adapter on Bluetooth LE one request takes about 30 ms
+   parked and 30 to 45 ms on the move: Android gives a Bluetooth LE link a turn every 11 to
+   15 ms, and a question and its answer need two turns. The gearbox itself answers within
+   that. Live data therefore carries about 27 requests a second in all; on the Power page,
+   with torque on every second reading, that is 14 to 16 engine-speed readings a second.
+   Classic Bluetooth on the same adapter is slower and erratic (about 40 to 50 ms). The
+   gearbox refuses to send a reading repeatedly by itself (service `2A` answers `7F 2A 11`).
+   What is left is a faster adapter on classic Bluetooth; not yet tried.
+8. **The car screen's buttons.** Live data on/off and the centre dial's page are on the
    phone. Android Auto does not allow this kind of screen with no button at all, so one icon
    button (switch page) remains; it should show only for about ten seconds after the screen
    is touched. Android Auto also holds a strip at the top of the screen back for buttons;
    the gauges now paint over it. To check in the car: that the gauges fill the height, and
    that the button does go away. The phone's Centre dial panel shows the screen area
    Android Auto reports.
-5. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
+9. **How far the shift light lags the engine.** Each reading goes adapter → Bluetooth → phone →
    Android Auto → car screen. In a low gear the revs can climb several hundred rpm in that
    time, so the lights may need to come on earlier than the figures above. This has to be
    measured on the car.

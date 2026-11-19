@@ -1,6 +1,8 @@
 package com.rsmonitor.app
 
 import android.Manifest
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -22,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Draws the phone app's three tabs to PNG files, next to the gauge previews
- * (app/build/outputs/gauge-previews), as they look with no adapter connected. The README
+ * (app/build/outputs/gauge-previews), as they look with no adapter connected (Connection with one sample adapter paired). The README
  * shows these files by name from the `previews` branch: keep the names.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -56,8 +58,18 @@ class PhonePreviewTest {
     @Config(qualifiers = "w412dp-h2500dp-420dpi")
     fun settingsInFull() = render("phone-settings-full", "Settings")
 
+    /** With Bluetooth on and one sample adapter paired, so the list of adapters shows. */
     @Test
-    fun connection() = render("phone-connection", "Connection")
+    fun connection() {
+        val app = RuntimeEnvironment.getApplication()
+        val adapter = app.getSystemService(BluetoothManager::class.java).adapter
+        shadowOf(adapter).setEnabled(true)
+        val sample = adapter.getRemoteDevice("00:11:22:33:44:55")
+        shadowOf(sample).setName("OBDII")
+        shadowOf(sample).setType(BluetoothDevice.DEVICE_TYPE_DUAL)
+        shadowOf(adapter).setBondedDevices(setOf(sample))
+        render("phone-connection", "Connection")
+    }
 
     /** With a drive's worth of sample peaks, so the rows are not all dashes. */
     @Test
