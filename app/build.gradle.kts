@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Counts up with every build on GitHub, so each APK installs over the one before it.
+val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+
 android {
     namespace = "com.rsmonitor.app"
     compileSdk = 35
@@ -12,8 +15,20 @@ android {
         applicationId = "com.rsmonitor.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
+    }
+
+    // Every build is signed with the same key, kept in the repo, so a new build installs
+    // over the old one and the app's settings survive. It is a debug key: it proves
+    // nothing about who built an APK.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("signing/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -32,6 +47,11 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -48,4 +68,6 @@ dependencies {
     implementation("androidx.car.app:app-projected:1.4.0")
 
     testImplementation("junit:junit:4.13.2")
+    // draws the gauge screen to PNG files during tests, so the design can be checked without a car
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

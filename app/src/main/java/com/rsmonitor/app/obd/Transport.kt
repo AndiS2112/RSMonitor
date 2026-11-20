@@ -133,6 +133,10 @@ class BleTransport(private val context: Context, private val device: BluetoothDe
             }
             val (notify, write) = pair
             writeChar = write
+            // Ask for the short connection interval: each request and its answer cross the
+            // link several times, and at the default interval that alone takes most of a
+            // tenth of a second.
+            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
             g.setCharacteristicNotification(notify, true)
             val cccd = notify.getDescriptor(CLIENT_CONFIG)
             if (cccd == null) {

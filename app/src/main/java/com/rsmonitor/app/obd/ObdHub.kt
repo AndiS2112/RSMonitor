@@ -3,6 +3,9 @@ package com.rsmonitor.app.obd
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.os.SystemClock
+import com.rsmonitor.app.drive.Drive
+import com.rsmonitor.app.drive.Gear
+import com.rsmonitor.app.drive.metricHorsepower
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +34,40 @@ object ObdHub {
     const val GEARBOX = "7E1"
 
     private const val LOG_LIMIT = 200
+    private const val TIMING_PERIOD_MS = 10_000L
+
+    /** No answer from the car for this long counts as "the car has been switched off". */
+    private const val CAR_OFF_MS = 30_000L
+
+    /** An engine-speed reading older than this is no longer shown. */
+    private const val STALE_MS = 2_000L
+
+    /** Oil temperatures move slowly, and every question about them costs an engine-speed reading. */
+    private const val GEAR_PERIOD_MS = 3_000L
+    private const val GEAR_STALE_MS = 10_000L
+    private const val OIL_PERIOD_MS = 3_000L
+    private const val OIL_STALE_MS = 10_000L
+
+    /** The gear and the selector are asked for twice a second; a gear older than this is not shown. */
+    private const val SELECTOR_PERIOD_MS = 500L
+    private const val SELECTOR_STALE_MS = 3_000L
+
+    /** After this many rounds without engine speed from the gearbox, the engine is asked instead. */
+    private const val GEARBOX_GIVE_UP = 5
+    private const val GEARBOX_RETRY_MS = 5_000L
+
+    /** Set by the car screen: true while the centre dial shows power and torque. */
+    @Volatile
+    var torqueWanted = false
+
+    /**
+     * How often torque is read while it is wanted: with every engine-speed reading (1), with
+     * every second one (2), and so on. Each torque reading costs one engine-speed reading, so
+     * a higher number makes the shift lights quicker and the torque needle slower. May be
+     * changed while live.
+     */
+    @Volatile
+    var torqueEvery = 1
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
@@ -65,6 +102,107 @@ object ObdHub {
     /** Engine-speed readings per second while live. */
     val rate: StateFlow<Float> = _rate
 
+    private val _torqueRate = MutableStateFlow(0f)
+    /** Torque readings per second while live and the centre dial shows power. */
+    val torqueRate: StateFlow<Float> = _torqueRate
+
+    /** Whether torque has been read since live data was switched on. */
+    enum class TorqueSource { Unknown, Available, Missing }
+
+    private val _torqueSource = MutableStateFlow(TorqueSource.Unknown)
+    val torqueSource: StateFlow<TorqueSource> = _torqueSource
+
+    private val _torque = MutableStateFlow<Int?>(null)
+    /** Engine torque in Nm, as the gearbox receives it from the engine. Never below zero. */
+    val torque: StateFlow<Int?> = _torque
+
+    private val _power = MutableStateFlow<Int?>(null)
+    /** Engine power in metric horsepower, from torque and engine speed. */
+    val power: StateFlow<Int?> = _power
+
+    private val _oilTemp = MutableStateFlow<Int?>(null)
+    /** Engine oil temperature in °C, asked from the engine control unit every few seconds while live. */
+    val oilTemp: StateFlow<Int?> = _oilTemp
+
+    private val _gear = MutableStateFlow<Gear?>(null)
+    /** The selector position and gear, asked from the gearbox twice a second while live. */
+    val gear: StateFlow<Gear?> = _gear
+
+    private val _gearTemp = MutableStateFlow<Int?>(null)
+    /** Gearbox oil temperature in °C, asked from the gearbox control unit every few seconds while live. */
+    val gearTemp: StateFlow<Int?> = _gearTemp
+
+    /** When the car last answered anything, on the SystemClock.elapsedRealtime clock. */
+    @Volatile private var lastHeard = 0L
+
+    /** True once the peaks have been cleared for the current silence (or nothing was ever heard). */
+    @Volatile private var silenceHandled = true
+
+    private fun heard() {
+        lastHeard = SystemClock.elapsedRealtime()
+        silenceHandled = false
+    }
+
+    /** One data ID that answered during a scan, with the bytes it returned. */
+    data class ScanHit(val id: Int, val data: List<Int>)
+
+    data class ScanState(
+        val running: Boolean = false,
+        val unit: String = ENGINE,
+        val from: Int = 0,
+        val to: Int = 0,
+        val current: Int = 0,
+        val tried: Int = 0,
+        val hits: List<ScanHit> = emptyList(),
+        /** True when the unit accepts several IDs per request, which makes the scan about three times faster. */
+        val batched: Boolean = false,
+        val extendedSession: Boolean = false,
+    ) {
+        /** The results as plain text, one ID per line, for sharing. */
+        fun report(): String = buildString {
+            val name = if (unit == ENGINE) "engine" else "gearbox"
+            append("RS Monitor scan · $name ($unit) · ${"%04X".format(from)}–${"%04X".format(current)} · ")
+            append("tried $tried · ${hits.size} answered")
+            if (extendedSession) append(" · extended session")
+            append('\n')
+            for (hit in hits) {
+                append("%04X".format(hit.id)).append(": ").append(hexString(hit.data)).append('\n')
+            }
+        }
+    }
+
+    private var scanner: Job? = null
+    private val _scan = MutableStateFlow(ScanState())
+    /** Progress and results of the data-ID scan. */
+    val scan: StateFlow<ScanState> = _scan
+
+    /** Progress of a drive recording; the rows themselves are fetched with [recordingReport]. */
+    data class RecordState(
+        val running: Boolean = false,
+        val rows: Int = 0,
+        val seconds: Int = 0,
+        /** True when the gearbox answers several IDs in one request, which makes the rows come faster. */
+        val batched: Boolean = false,
+    )
+
+    private var recorder: Job? = null
+    private val recordedRows = ArrayList<String>()
+    private val _record = MutableStateFlow(RecordState())
+    val record: StateFlow<RecordState> = _record
+
+    /** Progress and results of the speed test: see [SpeedTest]. */
+    data class SpeedState(
+        val running: Boolean = false,
+        val done: Int = 0,
+        val total: Int = 0,
+        val timings: List<Timing> = emptyList(),
+        val note: String? = null,
+    )
+
+    private var speedTester: Job? = null
+    private val _speed = MutableStateFlow(SpeedState())
+    val speed: StateFlow<SpeedState> = _speed
+
     fun connect(context: Context, device: BluetoothDevice, lowEnergy: Boolean) {
         if (_link.value != Link.Disconnected) return
         _link.value = Link.Connecting
@@ -94,6 +232,12 @@ object ObdHub {
     }
 
     fun disconnect() {
+        scanner?.cancel()
+        scanner = null
+        recorder?.cancel()
+        recorder = null
+        speedTester?.cancel()
+        speedTester = null
         poller?.cancel()
         poller = null
         transport?.close()
@@ -102,6 +246,8 @@ object ObdHub {
         adapterHeader = ""
         _rpm.value = null
         _rate.value = 0f
+        _torqueRate.value = 0f
+        clearReadings()
         _adapter.value = ""
         _link.value = Link.Disconnected
     }
@@ -132,6 +278,7 @@ object ObdHub {
                     }
                     e.command(cmd)
                 }
+                if (isCarReply(reply)) heard()
                 append(cmd, reply)
             } catch (ex: LinkLost) {
                 append(cmd, ex.message ?: "Adapter disconnected", failed = true)
@@ -142,55 +289,511 @@ object ObdHub {
         }
     }
 
-    /** Turns continuous engine-speed polling on or off. */
+    /**
+     * Asks the selected control unit for every data ID from [from] to [to] (read-only "22"
+     * requests) and records the ones that answer. Live polling is switched off while it runs.
+     *
+     * With [extendedSession] the unit is first asked to open an extended diagnostic session
+     * ("10 03"), in which some units reveal more IDs. The scan's own requests keep it open.
+     *
+     * If the unit accepts several IDs in one request, IDs are asked three at a time and only
+     * groups that answer are then asked one by one.
+     */
+    fun startScan(from: Int, to: Int, extendedSession: Boolean) {
+        val e = elm ?: return
+        if (_scan.value.running) return
+        val lo = minOf(from, to).coerceIn(0, 0xFFFF)
+        val hi = maxOf(from, to).coerceIn(0, 0xFFFF)
+        val unit = _unit.value
+        stopRecording()
+        stopSpeedTest()
+        setLive(false)
+        _scan.value = ScanState(running = true, unit = unit, from = lo, to = hi, current = lo, extendedSession = extendedSession)
+        scanner = scope.launch {
+            try {
+                if (extendedSession) append("1003", ask(e, unit, "1003"))
+                val batched = canBatch(e, unit)
+                _scan.value = _scan.value.copy(batched = batched)
+
+                var id = lo
+                while (id <= hi && isActive) {
+                    val group = (id..minOf(id + (if (batched) 2 else 0), hi)).toList()
+                    val worthAsking = group.size == 1 ||
+                        isPositiveRead(ask(e, unit, "22" + group.joinToString("") { "%04X".format(it) }))
+                    var found = emptyList<ScanHit>()
+                    if (worthAsking) {
+                        for (one in group) {
+                            val data = parseUdsData(ask(e, unit, "22%04X".format(one)), one)
+                            if (data != null) found = found + ScanHit(one, data)
+                        }
+                    }
+                    val before = _scan.value
+                    _scan.value = before.copy(current = group.last(), tried = before.tried + group.size, hits = before.hits + found)
+                    id = group.last() + 1
+                }
+            } catch (ex: LinkLost) {
+                append("scan", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
+            } finally {
+                _scan.value = _scan.value.copy(running = false)
+            }
+        }
+    }
+
+    /** One request to a unit during a scan. A timeout counts as "no answer"; a lost link is thrown. */
+    private suspend fun ask(e: Elm327, unit: String, request: String, log: Boolean = true): List<String> =
+        try {
+            lock.withLock {
+                ensureHeader(e, unit, log)
+                e.command(request, 1_200)
+            }.also { if (isCarReply(it)) heard() }
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            emptyList()
+        }
+
+    /**
+     * Whether the unit answers a request that mixes an ID it refuses with one it supports.
+     * The VIN (F190) is the supported one; units that only answer when every ID is valid
+     * fail this and are scanned one ID at a time.
+     */
+    private suspend fun canBatch(e: Elm327, unit: String): Boolean {
+        if (parseUdsData(ask(e, unit, "22F190"), 0xF190) == null) return false
+        val refused = listOf(0x0001, 0x0002, 0xFFF0).firstOrNull { !isPositiveRead(ask(e, unit, "22%04X".format(it))) }
+            ?: return false
+        return isPositiveRead(ask(e, unit, "22%04X".format(refused) + "F190"))
+    }
+
+    fun stopScan() {
+        scanner?.cancel()
+        scanner = null
+    }
+
+    /**
+     * Records what the gearbox reports while the car is driven: see [RecordPlan]. It only
+     * reads values. Live polling and any scan are switched off while it runs, so the car
+     * screen shows no engine speed during a recording.
+     */
+    fun startRecording() {
+        val e = elm ?: return
+        if (_record.value.running) return
+        stopScan()
+        stopSpeedTest()
+        setLive(false)
+        synchronized(recordedRows) { recordedRows.clear() }
+        _record.value = RecordState(running = true)
+        recorder = scope.launch {
+            suspend fun together(group: RecordPlan.Group): List<List<Int>>? =
+                parseUdsGroup(ask(e, GEARBOX, group.request, log = false), group.ids, group.sizes)
+            try {
+                var batched = RecordPlan.GROUPS.all { together(it) != null }
+                _record.value = _record.value.copy(batched = batched)
+                val start = SystemClock.elapsedRealtime()
+                var row = 0
+                var misses = 0
+                while (isActive && row < RecordPlan.MAX_ROWS) {
+                    val fast = ArrayList<List<Int>?>(RecordPlan.FAST.size)
+                    if (batched) {
+                        var missed = false
+                        for (group in RecordPlan.GROUPS) {
+                            val values = together(group)
+                            if (values != null) fast.addAll(values) else {
+                                missed = true
+                                group.ids.forEach { _ -> fast.add(null) }
+                            }
+                        }
+                        // if the combined answers stop coming, ask one by one from then on
+                        if (!missed) misses = 0 else if (++misses >= 5) batched = false
+                    } else {
+                        for (id in RecordPlan.FAST) fast.add(parseUdsData(ask(e, GEARBOX, "22%04X".format(id), log = false), id))
+                    }
+                    val extraId = RecordPlan.ROTATING[row % RecordPlan.ROTATING.size]
+                    val extra = parseUdsData(ask(e, GEARBOX, "22%04X".format(extraId), log = false), extraId)
+                    val engineRpm = if (row % RecordPlan.ENGINE_EVERY == 0) parseRpm(ask(e, ENGINE, "010C", log = false)) else null
+                    val millis = SystemClock.elapsedRealtime() - start
+                    synchronized(recordedRows) { recordedRows += recordRow(millis, fast, extraId, extra, engineRpm) }
+                    row++
+                    _record.value = RecordState(running = true, rows = row, seconds = (millis / 1000).toInt(), batched = batched)
+                }
+            } catch (ex: LinkLost) {
+                append("record", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
+            } finally {
+                _record.value = _record.value.copy(running = false)
+            }
+        }
+    }
+
+    fun stopRecording() {
+        recorder?.cancel()
+        recorder = null
+    }
+
+    /** The recording as text: a title line, the column names, then one row per line. */
+    fun recordingReport(): String {
+        val state = _record.value
+        val rows = synchronized(recordedRows) { recordedRows.toList() }
+        return buildString {
+            append("RS Monitor recording · gearbox (7E1) · ${rows.size} rows · ${state.seconds} s · ")
+            append(if (state.batched) "several values per request" else "one value per request")
+            append('\n')
+            append(RecordPlan.COLUMNS).append('\n')
+            for (row in rows) append(row).append('\n')
+        }
+    }
+
+    /**
+     * Times three kinds of request, [SpeedTest.TRIES] times each: a command the adapter
+     * answers by itself, engine speed from the gearbox as live data reads it, and engine
+     * speed from the engine. It only reads values. Live data, a scan and a recording are
+     * switched off while it runs; live data comes back on afterwards if it was on.
+     */
+    fun startSpeedTest() {
+        val e = elm ?: return
+        if (_speed.value.running) return
+        stopScan()
+        stopRecording()
+        val wasLive = _live.value
+        setLive(false)
+        val total = 3 * SpeedTest.TRIES
+        _speed.value = SpeedState(running = true, total = total)
+        speedTester = scope.launch {
+            /** One timed request; an empty reply when nothing came back in time. */
+            suspend fun timed(unit: String?, command: String): Pair<Float, List<String>> = lock.withLock {
+                if (unit != null) ensureHeader(e, unit, log = false)
+                val sent = System.nanoTime()
+                val reply = try {
+                    e.command(command, 1_500)
+                } catch (ex: LinkLost) {
+                    throw ex
+                } catch (ex: IOException) {
+                    emptyList<String>()
+                }
+                Pair((System.nanoTime() - sent) / 1_000_000f, reply)
+            }
+
+            suspend fun run(name: String, unit: String?, command: String, answered: (List<String>) -> Boolean): Timing {
+                val times = ArrayList<Float>(SpeedTest.TRIES)
+                var failed = 0
+                var warmUpAnswers = 0
+                for (i in 0 until SpeedTest.WARM_UP + SpeedTest.TRIES) {
+                    if (!isActive) break
+                    val (ms, reply) = timed(unit, command)
+                    val ok = answered(reply)
+                    if (ok && unit != null) heard()
+                    if (i < SpeedTest.WARM_UP) {
+                        if (ok) warmUpAnswers++
+                        // nothing answers this at all: do not sit through a timeout for every try
+                        if (i == SpeedTest.WARM_UP - 1 && warmUpAnswers == 0) {
+                            failed = SpeedTest.TRIES
+                            _speed.value = _speed.value.copy(done = _speed.value.done + SpeedTest.TRIES)
+                            break
+                        }
+                        continue
+                    }
+                    if (ok) times += ms else failed++
+                    _speed.value = _speed.value.copy(done = _speed.value.done + 1)
+                }
+                return Timing(name, times, failed).also { _speed.value = _speed.value.copy(timings = _speed.value.timings + it) }
+            }
+
+            try {
+                run(SpeedTest.ADAPTER, null, "ATI") { it.isNotEmpty() }
+                // the short form of a request, where the adapter takes it, as live data uses it
+                val short = parseUdsData(timed(GEARBOX, "22%04X1".format(GEARBOX_SPEED_ID)).second, GEARBOX_SPEED_ID) != null ||
+                    parseRpm(timed(ENGINE, "010C1").second) != null
+                val tail = if (short) "1" else ""
+                run(SpeedTest.GEARBOX, GEARBOX, "22%04X".format(GEARBOX_SPEED_ID) + tail) { parseUdsData(it, GEARBOX_SPEED_ID) != null }
+                run(SpeedTest.ENGINE, ENGINE, "010C$tail") { parseRpm(it) != null }
+                val carAnswered = _speed.value.timings.any { it.name != SpeedTest.ADAPTER && it.median != null }
+                _speed.value = _speed.value.copy(
+                    note = when {
+                        !carAnswered -> "The car did not answer. Switch the ignition on and run the test again."
+                        !short -> "This adapter does not take the short form of a request, so it waits a while after every answer."
+                        else -> null
+                    },
+                )
+            } catch (ex: LinkLost) {
+                append("speed test", ex.message ?: "Adapter disconnected", failed = true)
+                disconnect()
+            } finally {
+                _speed.value = _speed.value.copy(running = false)
+                if (wasLive && _link.value == Link.Ready && !_live.value) setLive(true)
+            }
+        }
+    }
+
+    fun stopSpeedTest() {
+        speedTester?.cancel()
+        speedTester = null
+    }
+
+    /** The speed test's result as text, for sharing. */
+    fun speedReport(): String = SpeedTest.report(_speed.value.timings, _adapter.value, _speed.value.note)
+
+    /** Turns live data on or off. */
     fun setLive(on: Boolean) {
+        // live polling and a recording or a speed test would only slow each other down
+        if (on) stopRecording()
+        if (on && _speed.value.running) stopSpeedTest()
         _live.value = on
         poller?.cancel()
         poller = null
         _rpm.value = null
         _rate.value = 0f
+        _torqueRate.value = 0f
+        clearReadings()
         if (on && _link.value == Link.Ready) startPolling()
     }
 
+    private fun clearReadings() {
+        _torque.value = null
+        _power.value = null
+        _torqueSource.value = TorqueSource.Unknown
+        _gear.value = null
+        _gearTemp.value = null
+        _oilTemp.value = null
+    }
+
+    /**
+     * Reads the car while live.
+     *
+     * Everything fast comes from the gearbox control unit, so the adapter does not have to be
+     * pointed back and forth: engine speed in every round and, while the centre dial shows
+     * power ([torqueWanted]), engine torque straight after it. Twice a second the gear and
+     * the selector are asked for; every few seconds the gearbox's mode
+     * byte and oil temperature, and, from the engine control unit, the engine oil temperature.
+     *
+     * If the gearbox stops answering for engine speed, the engine is asked instead ("010C"),
+     * and the gearbox is tried again every few seconds.
+     *
+     * Every request here has an answer of one CAN frame. Once the car is answering, the
+     * adapter is tried with a "1" after the request, which tells it to hand the answer over
+     * as soon as that one frame has arrived instead of waiting to see whether more follow.
+     * Adapters that understand it answer much faster; if this one does not, requests go out
+     * as before.
+     */
     private fun startPolling() {
         poller?.cancel()
         poller = scope.launch {
             var count = 0
+            var torqueCount = 0
+            var round = 0
             var windowStart = SystemClock.elapsedRealtime()
+            var lastReading = windowStart
+            var lastTorque = windowStart
+            var lastGear = 0L
+            var quick: Boolean? = null     // whether the adapter takes a "1" after a request; null until tried
+            var groups = true              // the gearbox answers several IDs in one request
+            var groupMisses = 0
+            var gearboxMisses = 0          // rounds in a row without engine speed from the gearbox
+            var gearboxRetryAt = 0L
+            var engaged: Int? = null
+            var selector: Int? = null
+            var mode: Int? = null
+            var selectorAsked = 0L
+            var gearAsked = 0L
+            var gearRead = 0L
+            var oilAsked = 0L
+            var oilRead = 0L
+            // where the time goes, written to the console every few seconds
+            val timing = LiveTiming()
+            var timingStart = windowStart
+
+            /** Several gearbox IDs in one request; null when that did not work, and for good after three failures. */
+            suspend fun group(e: Elm327, ids: List<Int>, sizes: List<Int>): List<List<Int>>? {
+                if (!groups) return null
+                val values = readGroup(e, GEARBOX, ids, sizes, quick == true)
+                if (values != null) groupMisses = 0 else if (++groupMisses >= 3) groups = false
+                return values
+            }
+
             while (isActive && _link.value == Link.Ready) {
                 val e = elm ?: break
+                val roundStart = SystemClock.elapsedRealtimeNanos()
                 try {
-                    val reply = lock.withLock {
-                        ensureHeader(e, ENGINE)
-                        e.command("010C", 1_500)
+                    val started = SystemClock.elapsedRealtime()
+                    var speed: Int? = null
+                    var nm: Int? = null
+                    var gearSeen = false
+
+                    if (gearboxMisses < GEARBOX_GIVE_UP || started >= gearboxRetryAt) {
+                        speed = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick == true))
+                        val speedDone = SystemClock.elapsedRealtimeNanos()
+                        timing.speedRequest((speedDone - roundStart) / 1_000_000f)
+                        // Torque is a request of its own. Asked for together with engine speed
+                        // the answer no longer fits one frame, and that took as long as two.
+                        if (torqueWanted && speed != null && round++ % torqueEvery.coerceAtLeast(1) == 0) {
+                            nm = gearboxEngineTorque(readOne(e, GEARBOX, GEARBOX_TORQUE_ID, quick == true))
+                            timing.torqueRequest((SystemClock.elapsedRealtimeNanos() - speedDone) / 1_000_000f)
+                        }
+                        if (speed != null) {
+                            gearboxMisses = 0
+                        } else if (++gearboxMisses >= GEARBOX_GIVE_UP) {
+                            gearboxRetryAt = SystemClock.elapsedRealtime() + GEARBOX_RETRY_MS
+                        }
                     }
-                    val value = parseRpm(reply)
-                    if (value != null) {
-                        _rpm.value = value
+                    if (speed == null && gearboxMisses >= GEARBOX_GIVE_UP) {
+                        val reply = lock.withLock {
+                            ensureHeader(e, ENGINE, log = false)
+                            e.command(if (quick == true) "010C1" else "010C", 1_500)
+                        }
+                        speed = parseRpm(reply)
+                    }
+
+                    // the car is answering: find out once whether the adapter takes the short form
+                    if (speed != null && quick == null && gearboxMisses == 0) {
+                        val works = gearboxEngineSpeed(readOne(e, GEARBOX, GEARBOX_SPEED_ID, quick = true)) != null
+                        quick = works
+                        append("live", if (works) "Short waits: on" else "Short waits: not supported by this adapter", failed = false)
+                    }
+
+                    val now = SystemClock.elapsedRealtime()
+                    if (speed != null) {
+                        _rpm.value = speed
+                        Drive.onEngineSpeed(speed)
                         count++
+                        lastReading = now
+                        heard()
                     }
+                    if (nm != null) {
+                        torqueCount++
+                        lastTorque = now
+                        // the dials start at zero; engine braking shows as none
+                        val shown = nm.coerceAtLeast(0)
+                        _torque.value = shown
+                        _torqueSource.value = TorqueSource.Available
+                        val rpm = speed ?: _rpm.value
+                        if (rpm != null) {
+                            val hp = metricHorsepower(shown, rpm)
+                            _power.value = hp
+                            Drive.onPower(hp, shown)
+                        }
+                    }
+                    val answering = now - lastReading < STALE_MS
+
+                    // twice a second: which gear, and where the selector is
+                    if (answering && now - selectorAsked >= SELECTOR_PERIOD_MS) {
+                        selectorAsked = now
+                        val pair = group(e, listOf(GEARBOX_GEAR_ID, GEARBOX_SELECTOR_ID), listOf(1, 1))
+                        if (pair != null) {
+                            engaged = pair[0][0]
+                            selector = pair[1][0]
+                            gearSeen = true
+                        } else {
+                            readOne(e, GEARBOX, GEARBOX_GEAR_ID, quick == true)?.firstOrNull()?.let {
+                                engaged = it
+                                gearSeen = true
+                            }
+                            readOne(e, GEARBOX, GEARBOX_SELECTOR_ID, quick == true)?.firstOrNull()?.let { selector = it }
+                        }
+                    }
+
+                    // every few seconds: the gearbox's mode byte and oil temperature
+                    if (answering && now - gearAsked >= GEAR_PERIOD_MS) {
+                        gearAsked = now
+                        val pair = group(e, listOf(GEARBOX_MODE_ID, GEARBOX_OIL_ID), listOf(1, 1))
+                        val oilByte = if (pair != null) {
+                            mode = pair[0][0]
+                            pair[1][0]
+                        } else {
+                            readOne(e, GEARBOX, GEARBOX_MODE_ID, quick == true)?.firstOrNull()?.let { mode = it }
+                            readOne(e, GEARBOX, GEARBOX_OIL_ID, quick == true)?.firstOrNull()
+                        }
+                        if (oilByte != null) {
+                            val celsius = oilByte - 40
+                            gearRead = SystemClock.elapsedRealtime()
+                            heard()
+                            _gearTemp.value = celsius
+                            Drive.onGearboxTemperature(celsius)
+                        }
+                    }
+
+                    // and, at the same pace, the engine for its oil temperature
+                    if (answering && now - oilAsked >= OIL_PERIOD_MS) {
+                        oilAsked = now
+                        val celsius = readOne(e, ENGINE, ENGINE_OIL_ID, quick == true)?.let { engineOilCelsiusOf(it) }
+                        if (celsius != null) {
+                            oilRead = SystemClock.elapsedRealtime()
+                            heard()
+                            _oilTemp.value = celsius
+                            Drive.onOilTemperature(celsius)
+                        }
+                    }
+
+                    if (gearSeen) lastGear = SystemClock.elapsedRealtime()
                 } catch (ex: LinkLost) {
-                    append("010C", ex.message ?: "Adapter disconnected", failed = true)
+                    append("live", ex.message ?: "Adapter disconnected", failed = true)
                     disconnect()
                     break
                 } catch (ex: IOException) {
                     delay(200)
                 }
                 val now = SystemClock.elapsedRealtime()
+                // ignition off with the adapter still powered: stop showing the last readings
+                if (now - lastReading > STALE_MS) _rpm.value = null
+                if (now - lastTorque > STALE_MS) {
+                    _torque.value = null
+                    _power.value = null
+                }
+                _gear.value = if (now - lastGear <= SELECTOR_STALE_MS) gearFrom(engaged, selector, mode) else null
+                if (now - gearRead > GEAR_STALE_MS) _gearTemp.value = null
+                if (now - oilRead > OIL_STALE_MS) _oilTemp.value = null
                 if (now - windowStart >= 1_000) {
                     _rate.value = count * 1_000f / (now - windowStart)
+                    _torqueRate.value = torqueCount * 1_000f / (now - windowStart)
                     count = 0
+                    torqueCount = 0
                     windowStart = now
+                }
+                timing.round((SystemClock.elapsedRealtimeNanos() - roundStart) / 1_000_000f)
+                if (now - timingStart >= TIMING_PERIOD_MS) {
+                    if (!timing.isEmpty) append("live", timing.summary(), failed = false)
+                    timing.reset()
+                    timingStart = now
                 }
             }
         }
     }
 
+    /** The data bytes of one ID while live, or null if the unit did not answer in time or refused. */
+    private suspend fun readOne(e: Elm327, unit: String, id: Int, quick: Boolean): List<Int>? =
+        try {
+            val reply = lock.withLock {
+                ensureHeader(e, unit, log = false)
+                e.command("22%04X".format(id) + if (quick) "1" else "", 1_500)
+            }
+            parseUdsData(reply, id)
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            null
+        }
+
+    /**
+     * Several IDs in one request while live; null unless the answer holds exactly those.
+     * Only for answers that fit one CAN frame, which is what [quick] counts on.
+     */
+    private suspend fun readGroup(e: Elm327, unit: String, ids: List<Int>, sizes: List<Int>, quick: Boolean): List<List<Int>>? =
+        try {
+            val reply = lock.withLock {
+                ensureHeader(e, unit, log = false)
+                e.command("22" + ids.joinToString("") { "%04X".format(it) } + if (quick) "1" else "", 1_500)
+            }
+            parseUdsGroup(reply, ids, sizes)
+        } catch (ex: LinkLost) {
+            throw ex
+        } catch (ex: IOException) {
+            null
+        }
+
     /** Points the adapter at a control unit. Call only while holding [lock]. */
-    private suspend fun ensureHeader(e: Elm327, header: String) {
+    private suspend fun ensureHeader(e: Elm327, header: String, log: Boolean = true) {
         if (adapterHeader == header) return
         val reply = e.command("ATSH$header")
-        append("ATSH$header", reply)
+        // live polling hops between the engine and the gearbox all the time; keep that out of the console
+        if (log) append("ATSH$header", reply)
         adapterHeader = header
     }
 
@@ -201,5 +804,29 @@ object ObdHub {
     private fun append(command: String, reply: String, failed: Boolean) {
         val line = LogLine(command, reply.ifEmpty { "(no reply)" }, failed)
         _log.value = (_log.value + line).takeLast(LOG_LIMIT)
+    }
+
+    init {
+        // Car-off watch. Once the car has answered at least once, 30 s without any answer
+        // clears every peak. That covers both the Bluetooth link dropping and the ignition
+        // going off while the adapter stays powered. The clock only runs while the app is
+        // actually asking (live data or a scan) or the link is down; a connected but idle
+        // console is not silence.
+        scope.launch {
+            var quietFrom = SystemClock.elapsedRealtime()
+            while (isActive) {
+                delay(1_000)
+                val now = SystemClock.elapsedRealtime()
+                val asking = _link.value != Link.Ready || _live.value || _scan.value.running || _speed.value.running
+                if (!asking) {
+                    quietFrom = now
+                    continue
+                }
+                if (!silenceHandled && now - maxOf(lastHeard, quietFrom) >= CAR_OFF_MS) {
+                    silenceHandled = true
+                    Drive.resetAllPeaks()
+                }
+            }
+        }
     }
 }

@@ -1,0 +1,214 @@
+package com.rsmonitor.app
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.RectF
+import com.rsmonitor.app.car.Centre
+import com.rsmonitor.app.car.GTail
+import com.rsmonitor.app.car.GTailPoints
+import com.rsmonitor.app.car.GaugeFrame
+import com.rsmonitor.app.car.GaugePainter
+import com.rsmonitor.app.car.OilLimits
+import com.rsmonitor.app.drive.GTracker
+import com.rsmonitor.app.drive.Gear
+import java.io.File
+import java.io.FileOutputStream
+import org.junit.Assert.assertNotEquals
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+/**
+ * Draws the gauge screen to PNG files (app/build/outputs/gauge-previews) at the size the car
+ * gives the app, so the design can be looked at without a car. The build keeps the files.
+ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34])
+class GaugePreviewTest {
+    // the usable area the car reports to the app (read off the car screen)
+    private val width = 1156
+    private val height = 606
+
+    private fun render(name: String, frame: GaugeFrame) {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        GaugePainter(GaugePainter.figures(RuntimeEnvironment.getApplication())).paint(Canvas(bitmap), RectF(0f, 0f, width.toFloat(), height.toFloat()), frame)
+        val dir = File("build/outputs/gauge-previews").apply { mkdirs() }
+        FileOutputStream(File(dir, "$name.png")).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // something was drawn: the G-meter's centre is not the screen colour of the corner
+        assertNotEquals(bitmap.getPixel(2, 2), bitmap.getPixel(width / 2, height / 2 + 40))
+    }
+
+    /** The dot's last three seconds: off the brakes and into a right-hand bend. */
+    private fun tail(): GTailPoints {
+        val t = GTail()
+        for (i in 0..90) {
+            val k = i / 90f
+            // from braking in a straight line (0, -0.8) round to where the dot is now (0.62, -0.28)
+            t.add(i * 33L, 0.62f * k * k, -0.8f + 0.52f * k)
+        }
+        return t.points(90 * 33L)
+    }
+
+    private val driven = GaugeFrame(
+        connected = true, live = true, rate = 13f, gStage = GTracker.Stage.Ready,
+        peakAccel = 0.36f, peakRight = 0.88f, peakBrake = 0.95f, peakLeft = 0.82f,
+    )
+
+    @Test
+    fun coldStart() = render(
+        "1-cold-start",
+        GaugeFrame(
+            connected = true, live = true, rate = 13f, rpm = 1500, oilTemp = 46, gearTemp = 38,
+            oilPeak = 46, gearPeak = 38, gStage = GTracker.Stage.Ready,
+            gLat = 0.02f, gLon = 0.01f, peakAccel = 0.08f, peakRight = 0.10f, peakBrake = 0.12f, peakLeft = 0.09f,
+        ),
+    )
+
+    @Test
+    fun driving() = render(
+        "2-driving",
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, tail = tail()),
+    )
+
+    @Test
+    fun hot() = render(
+        "3-hot",
+        driven.copy(rpm = 8300, oilTemp = 141, gearTemp = 126, oilPeak = 141, gearPeak = 126, gLat = -0.55f, gLon = 0.20f),
+    )
+
+    /**
+     * The exact peaks called up from the phone after a hard run: the needles have dropped
+     * back, the amber hands stand at the peaks as always, and the rows under the gauges read
+     * PEAK TEMP.
+     */
+    @Test
+    fun peaksCalledUp() = render(
+        "4-peaks-called-up",
+        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 84, oilPeak = 138, gearPeak = 121, showPeaks = true, gLat = 0.05f, gLon = 0.03f),
+    )
+
+    /** The same moment without the call-out: amber hands at the peaks, current readings below. */
+    @Test
+    fun coolingDown() = render(
+        "18-cooling-down-peak-hands",
+        driven.copy(rpm = 2100, oilTemp = 112, gearTemp = 84, oilPeak = 138, gearPeak = 121, gLat = 0.05f, gLon = 0.03f),
+    )
+
+    /** Called up before the car has given any oil temperature: dashes, no hands. */
+    @Test
+    fun peaksCalledUpWithNothingToShow() = render(
+        "17-peaks-called-up-no-readings",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, showPeaks = true),
+    )
+
+    /** What the car shows today: engine speed only, G-meter waiting to be calibrated. */
+    @Test
+    fun todayInTheCar() = render("5-today-rpm-only", GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820))
+
+    @Test
+    fun calibrating() = render(
+        "6-calibrating",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, gStage = GTracker.Stage.AwaitingPullAway),
+    )
+
+    @Test
+    fun notConnected() = render("7-not-connected", GaugeFrame())
+
+    // ---- the centre dial switched to power and torque ----
+
+    private val powerPage = driven.copy(centre = Centre.Power, oilPeak = 118, gearPeak = 86)
+
+    /** Full throttle at 5,000 rpm: peak torque. */
+    @Test
+    fun powerAtPeakTorque() = render(
+        "8-power-peak-torque",
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 74, torque = 430, power = 306, torquePeak = 430, powerPeak = 306),
+    )
+
+    /** Full throttle at 8,250 rpm: peak power, shift lights flashing. */
+    @Test
+    fun powerAtPeakPower() = render(
+        "9-power-peak-power",
+        powerPage.copy(rpm = 8250, oilTemp = 106, gearTemp = 76, torque = 383, power = 450, torquePeak = 430, powerPeak = 450),
+    )
+
+    @Test
+    fun powerCruising() = render(
+        "10-power-cruising",
+        powerPage.copy(rpm = 2400, oilTemp = 108, gearTemp = 78, torque = 112, power = 38, torquePeak = 430, powerPeak = 450),
+    )
+
+    // ---- with the gear shown beside the shift lights ----
+
+    @Test
+    fun gearDriving() = render(
+        "12-gear-driving",
+        driven.copy(rpm = 6300, oilTemp = 104, gearTemp = 74, oilPeak = 118, gearPeak = 86, gLat = 0.62f, gLon = -0.28f, gear = Gear('D', 4), tail = tail()),
+    )
+
+    @Test
+    fun gearOnThePowerPage() = render(
+        "13-gear-power-page",
+        powerPage.copy(rpm = 5000, oilTemp = 104, gearTemp = 74, torque = 430, power = 306, torquePeak = 430, powerPeak = 306, gear = Gear('S', 3)),
+    )
+
+    @Test
+    fun gearParked() = render(
+        "14-gear-parked",
+        driven.copy(rpm = 1100, oilTemp = 46, gearTemp = 38, oilPeak = 46, gearPeak = 38, gLat = 0.01f, gLon = 0f, gear = Gear('P')),
+    )
+
+    /** The engine does not offer torque: empty rings and dashes. */
+    @Test
+    fun powerWithoutTorque() = render(
+        "11-power-no-torque",
+        GaugeFrame(connected = true, live = true, rate = 13f, rpm = 820, centre = Centre.Power),
+    )
+
+    // ---- the oil icons carry the state ----
+
+    /** Engine oil at operating temperature, gearbox oil not yet: only the gearbox icon is blue. */
+    @Test
+    fun warmingUp() = render(
+        "15-warming-up",
+        driven.copy(rpm = 2400, oilTemp = 86, gearTemp = 41, oilPeak = 86, gearPeak = 41, gLat = 0.18f, gLon = 0.10f, gear = Gear('D', 2)),
+    )
+
+    /** Both oils in the red zone, at the faint end of the pulse. */
+    @Test
+    fun redZoneAtTheLowPointOfThePulse() = render(
+        "16-red-zone-pulse-low",
+        driven.copy(rpm = 7200, oilTemp = 134, gearTemp = 118, oilPeak = 134, gearPeak = 118, gLat = -0.55f, gLon = 0.20f, gear = Gear('S', 4), pulse = 0.25f),
+    )
+
+    /** At the shift point: all five lights lit red and the glow behind the dials at its brightest. */
+    @Test
+    fun shiftGlowBright() = render(
+        "20-shift-glow-bright",
+        driven.copy(centre = Centre.Power, rpm = 7900, power = 398, torque = 354, powerPeak = 398, torquePeak = 394, gear = Gear('M', 3), flashOn = true, glow = 1f),
+    )
+
+    /** The dark half of the flash: the lights are out and the glow is at its dimmest, not gone. */
+    @Test
+    fun shiftGlowDim() = render(
+        "21-shift-glow-dim",
+        driven.copy(rpm = 7900, gLat = 0.02f, gLon = 0.31f, gear = Gear('M', 3), flashOn = false, glow = 0.3f),
+    )
+
+    /**
+     * Limits changed on the phone: engine oil cold below 95 and hot from 110, gearbox oil hot
+     * from 100. The engine oil at 92 is now cold (blue icon) and the gearbox oil at 104 is hot.
+     */
+    @Test
+    fun oilLimitsSetOnThePhone() = render(
+        "19-oil-limits-changed",
+        driven.copy(
+            rpm = 2400, oilTemp = 92, gearTemp = 104, oilPeak = 92, gearPeak = 104, gLat = 0.05f, gLon = 0.03f, gear = Gear('D', 3),
+            limits = OilLimits(oilCold = 95, oilHot = 110, gearCold = 50, gearHot = 100),
+        ),
+    )
+}

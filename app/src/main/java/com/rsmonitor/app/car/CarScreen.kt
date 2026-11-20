@@ -1,0 +1,152 @@
+package com.rsmonitor.app.car
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.graphics.Rect
+import android.graphics.RectF
+import com.rsmonitor.app.obd.ObdHub
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.min
+
+/**
+ * What the phone and the car screen share about the car screen: which page the centre dial
+ * shows, chosen on the phone (or with the one button Android Auto insists on) and remembered
+ * between drives, and the screen area Android Auto last reported, shown on the phone so a
+ * layout problem in the car can be read off there.
+ */
+object CarScreen {
+    private const val CENTRE_KEY = "centre"
+    private const val TORQUE_EVERY_KEY = "torqueEvery"
+    private const val SHIFT_KEY = "shiftSteps"
+    private const val LIMITS_KEY = "oilLimits"
+    private const val GLOW_KEY = "shiftGlow"
+
+    /** The choices for how often torque is read: with every engine-speed reading, every second, … */
+    val TORQUE_EVERY_CHOICES = listOf(1, 2, 3, 4)
+
+    private var settings: SharedPreferences? = null
+    private val _centre = MutableStateFlow(Centre.GMeter)
+    private val _areaNote = MutableStateFlow<String?>(null)
+    private val _torqueEvery = MutableStateFlow(1)
+    private val _shiftSteps = MutableStateFlow(ShiftLights.STANDARD)
+    private val _oilLimits = MutableStateFlow(OilLimits.STANDARD)
+    private val _shiftGlow = MutableStateFlow(true)
+
+    val centre: StateFlow<Centre> = _centre
+
+    /**
+     * On the power page, torque is read with every this-many-th engine-speed reading. Set on
+     * the phone, also while driving, and remembered.
+     */
+    val torqueEvery: StateFlow<Int> = _torqueEvery
+
+    /**
+     * The engine speeds of the shift lights: five lights, then the flash. Set on the phone,
+     * also while driving, and remembered. [ShiftLights] uses them as soon as they change.
+     */
+    val shiftSteps: StateFlow<List<Int>> = _shiftSteps
+
+    /**
+     * Where each oil counts as cold and as hot. Set on the phone, also while driving, and
+     * remembered. The car screen draws with them as soon as they change.
+     */
+    val oilLimits: StateFlow<OilLimits> = _oilLimits
+
+    /** Whether the red glow shows behind the dials while the shift lights flash. On as built; remembered. */
+    val shiftGlow: StateFlow<Boolean> = _shiftGlow
+
+    /** For example "1180×630, clear 12,96 to 1168,618"; null until the car screen has been up. */
+    val areaNote: StateFlow<String?> = _areaNote
+
+    /** Reads the remembered page. Safe to call from both the phone screen and the car screen. */
+    @Synchronized
+    fun load(context: Context) {
+        if (settings != null) return
+        val stored = context.applicationContext.getSharedPreferences("gauges", Context.MODE_PRIVATE)
+        settings = stored
+        _centre.value = if (stored.getString(CENTRE_KEY, null) == Centre.Power.name) Centre.Power else Centre.GMeter
+        ObdHub.torqueWanted = _centre.value == Centre.Power
+        _torqueEvery.value = stored.getInt(TORQUE_EVERY_KEY, 1).takeIf { it in TORQUE_EVERY_CHOICES } ?: 1
+        ObdHub.torqueEvery = _torqueEvery.value
+        stored.getString(SHIFT_KEY, null)
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.takeIf { ShiftLights.isValid(it) }
+            ?.let {
+                _shiftSteps.value = it
+                ShiftLights.use(it)
+            }
+        _shiftGlow.value = stored.getBoolean(GLOW_KEY, true)
+        stored.getString(LIMITS_KEY, null)
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.let { OilLimits.from(it) }
+            ?.let { _oilLimits.value = it }
+    }
+
+    fun setShiftGlow(on: Boolean) {
+        _shiftGlow.value = on
+        settings?.edit()?.putBoolean(GLOW_KEY, on)?.apply()
+    }
+
+    /** Moves one oil limit by [by] °C; it stops at the ends of its scale and short of its partner. */
+    fun moveOilLimit(which: OilLimits.Which, by: Int) = setOilLimits(_oilLimits.value.moved(which, by))
+
+    fun standardOilLimits() = setOilLimits(OilLimits.STANDARD)
+
+    private fun setOilLimits(limits: OilLimits) {
+        if (!limits.isValid()) return
+        _oilLimits.value = limits
+        settings?.edit()?.putString(LIMITS_KEY, limits.toList().joinToString(","))?.apply()
+    }
+
+    /** Moves one shift-light speed by [by] rpm; it stops at its neighbours. */
+    fun moveShiftStep(index: Int, by: Int) = setShiftSteps(ShiftLights.moved(_shiftSteps.value, index, by))
+
+    fun standardShiftSteps() = setShiftSteps(ShiftLights.STANDARD)
+
+    private fun setShiftSteps(steps: List<Int>) {
+        if (!ShiftLights.isValid(steps)) return
+        _shiftSteps.value = steps
+        ShiftLights.use(steps)
+        settings?.edit()?.putString(SHIFT_KEY, steps.joinToString(","))?.apply()
+    }
+
+    fun setTorqueEvery(n: Int) {
+        if (n !in TORQUE_EVERY_CHOICES) return
+        _torqueEvery.value = n
+        ObdHub.torqueEvery = n
+        settings?.edit()?.putInt(TORQUE_EVERY_KEY, n)?.apply()
+    }
+
+    fun show(page: Centre) {
+        _centre.value = page
+        // torque is only read while its page shows; it costs engine-speed readings
+        ObdHub.torqueWanted = page == Centre.Power
+        settings?.edit()?.putString(CENTRE_KEY, page.name)?.apply()
+    }
+
+    fun switchCentre() = show(if (_centre.value == Centre.Power) Centre.GMeter else Centre.Power)
+
+    internal fun report(width: Int, height: Int, visible: Rect?) {
+        _areaNote.value = if (visible == null || visible.isEmpty) {
+            "$width×$height"
+        } else {
+            "$width×$height, clear ${visible.left},${visible.top} to ${visible.right},${visible.bottom}"
+        }
+    }
+}
+
+/**
+ * The part of the car's surface the gauges are painted in. Android Auto reports the area its
+ * own furniture leaves clear, and holds a strip along the top back for the template's
+ * buttons. The gauges take that strip as well, down to the same margin as at the left edge:
+ * the one button left on this screen shows only for a few seconds after the screen is
+ * touched, and would otherwise cost a fifth of the height all the time.
+ */
+fun gaugeArea(visible: Rect?, width: Int, height: Int): RectF {
+    if (visible == null || visible.isEmpty) return RectF(0f, 0f, width.toFloat(), height.toFloat())
+    val top = min(visible.top, visible.left)
+    return RectF(visible.left.toFloat(), top.toFloat(), visible.right.toFloat(), visible.bottom.toFloat())
+}
